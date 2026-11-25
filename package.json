@@ -21,8 +21,8 @@
     "docs/screenshots"
   ],
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
-    "test:watch": "node --test --watch \"test/*.test.js\"",
+    "test": "node --test",
+    "test:watch": "node --test --watch",
     "check": "node scripts/check.js",
     "verify": "npm run check && npm run format:check && npm test",
     "prepublishOnly": "npm run verify",
