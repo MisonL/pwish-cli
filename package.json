@@ -1,0 +1,23 @@
+{
+  "name": "xiutu-cli",
+  "version": "0.1.0",
+  "description": "佐糖 AI 设计师（picwish.cn/ai-design-create）命令行工具：一句话出电商图、套图、详情图",
+  "type": "module",
+  "bin": {
+    "xiutu": "bin/xiutu.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skill",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  },
+  "license": "MIT",
+  "private": true
+}
