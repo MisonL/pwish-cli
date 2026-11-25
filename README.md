@@ -5,7 +5,7 @@
 <p>
   <a href="https://www.npmjs.com/package/pwish-cli"><img alt="npm" src="https://img.shields.io/npm/v/pwish-cli?color=5555FF"></a>
   <a href="https://www.npmjs.com/package/pwish-cli"><img alt="downloads" src="https://img.shields.io/npm/dm/pwish-cli"></a>
-  <a href="https://github.com/pwish-cli/pwish-cli/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/pwish-cli/pwish-cli/ci.yml?branch=main"></a>
+  <a href="https://github.com/MisonL/pwish-cli/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/MisonL/pwish-cli/ci.yml?branch=main"></a>
   <img alt="node" src="https://img.shields.io/node/v/pwish-cli">
   <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
