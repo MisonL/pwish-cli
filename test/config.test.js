@@ -17,9 +17,9 @@ test("没有 token 时 resolveToken 抛 NO_TOKEN", () => {
 });
 
 test("saveConfig/loadConfig 往返，且文件权限 0600", () => {
-  saveConfig({ token: "v2,1,482,abc", outDir: "out-test" });
+  saveConfig({ token: "v2,10000003,482,abc", outDir: "out-test" });
   const cfg = loadConfig();
-  assert.equal(cfg.token, "v2,1,482,abc");
+  assert.equal(cfg.token, "v2,10000003,482,abc");
   assert.equal(cfg.outDir, "out-test");
   assert.equal(cfg.productId, 482);
   const mode = fs.statSync(CONFIG_PATH).mode & 0o777;
@@ -27,17 +27,17 @@ test("saveConfig/loadConfig 往返，且文件权限 0600", () => {
 });
 
 test("环境变量覆盖配置文件", () => {
-  saveConfig({ token: "v2,1,482,abc" });
-  process.env.PWISH_TOKEN = "v2,2,482,def";
+  saveConfig({ token: "v2,10000003,482,abc" });
+  process.env.PWISH_TOKEN = "v2,10000002,482,def";
   try {
-    assert.equal(loadConfig().token, "v2,2,482,def");
+    assert.equal(loadConfig().token, "v2,10000002,482,def");
   } finally {
     delete process.env.PWISH_TOKEN;
   }
 });
 
 test("userIdOfToken 解析第二段", () => {
-  assert.equal(userIdOfToken("v2,30996077,482,deadbeef"), 30996077);
+  assert.equal(userIdOfToken("v2,10000001,482,deadbeef"), 10000001);
   assert.equal(userIdOfToken("garbage"), null);
   assert.equal(userIdOfToken(""), null);
 });
@@ -45,7 +45,7 @@ test("userIdOfToken 解析第二段", () => {
 test("loginWithToken 拒绝格式不对的 token", () => {
   assert.throws(() => loginWithToken("abc"), /格式/);
   assert.throws(() => loginWithToken(""), /格式/);
-  assert.equal(loginWithToken(" v2,1,482,x "), "v2,1,482,x");
+  assert.equal(loginWithToken(" v2,10000003,482,x "), "v2,10000003,482,x");
 });
 
 test("OSS V1 签名与手工计算一致", async () => {

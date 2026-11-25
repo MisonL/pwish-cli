@@ -267,9 +267,48 @@ export function readLocalStorage(dir, origin) {
   return result;
 }
 
-/** 常见 Chromium 浏览器的 Local Storage leveldb 目录（macOS 为主）。 */
-export function browserProfiles() {
+/** 各平台的 Chromium 系浏览器数据根目录。 */
+function chromiumRoots() {
   const home = os.homedir();
+  const platform = process.platform;
+
+  if (platform === "darwin") {
+    const base = path.join(home, "Library", "Application Support");
+    return [
+      ["Chrome", path.join(base, "Google", "Chrome")],
+      ["Edge", path.join(base, "Microsoft Edge")],
+      ["Brave", path.join(base, "BraveSoftware", "Brave-Browser")],
+      ["Chromium", path.join(base, "Chromium")],
+      ["Arc", path.join(base, "Arc", "User Data")],
+      ["Vivaldi", path.join(base, "Vivaldi")],
+    ];
+  }
+
+  if (platform === "win32") {
+    const local = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    return [
+      ["Chrome", path.join(local, "Google", "Chrome", "User Data")],
+      ["Edge", path.join(local, "Microsoft", "Edge", "User Data")],
+      ["Brave", path.join(local, "BraveSoftware", "Brave-Browser", "User Data")],
+      ["Chromium", path.join(local, "Chromium", "User Data")],
+      ["Vivaldi", path.join(local, "Vivaldi", "User Data")],
+    ];
+  }
+
+  // Linux 及其他：XDG
+  const config = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+  return [
+    ["Chrome", path.join(config, "google-chrome")],
+    ["Chrome Beta", path.join(config, "google-chrome-beta")],
+    ["Chromium", path.join(config, "chromium")],
+    ["Edge", path.join(config, "microsoft-edge")],
+    ["Brave", path.join(config, "BraveSoftware", "Brave-Browser")],
+    ["Vivaldi", path.join(config, "vivaldi")],
+  ];
+}
+
+/** 常见 Chromium 浏览器的 Local Storage leveldb 目录（macOS / Windows / Linux）。 */
+export function browserProfiles() {
   const found = [];
 
   const add = (browser, profile) => {
@@ -277,17 +316,7 @@ export function browserProfiles() {
     if (fs.existsSync(leveldb)) found.push({ browser, profile, leveldb });
   };
 
-  const chromiumRoots = [
-    ["Chrome", path.join(home, "Library/Application Support/Google/Chrome")],
-    ["Edge", path.join(home, "Library/Application Support/Microsoft Edge")],
-    ["Brave", path.join(home, "Library/Application Support/BraveSoftware/Brave-Browser")],
-    ["Chromium", path.join(home, "Library/Application Support/Chromium")],
-    ["Ego Lite", path.join(home, "Library/Application Support/Citro Labs/ego lite")],
-    ["Arc", path.join(home, "Library/Application Support/Arc/User Data")],
-    ["Vivaldi", path.join(home, "Library/Application Support/Vivaldi")],
-  ];
-
-  for (const [browser, root] of chromiumRoots) {
+  for (const [browser, root] of chromiumRoots()) {
     if (!fs.existsSync(root)) continue;
     add(browser, path.join(root, "Default"));
     try {
@@ -295,21 +324,7 @@ export function browserProfiles() {
         if (d.isDirectory() && /^Profile \d+$/.test(d.name)) add(browser, path.join(root, d.name));
       }
     } catch {
-      /* ignore */
-    }
-  }
-
-  // agent-browser 下载的 Chrome for Testing：<root>/chrome-*/Google Chrome for Testing/Default
-  const abRoot = path.join(home, ".agent-browser/browsers");
-  if (fs.existsSync(abRoot)) {
-    try {
-      for (const d of fs.readdirSync(abRoot)) {
-        for (const sub of ["Google Chrome for Testing", "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS"]) {
-          add("Chrome for Testing", path.join(abRoot, d, sub, "Default"));
-        }
-      }
-    } catch {
-      /* ignore */
+      /* 无权限或不可读时跳过 */
     }
   }
 

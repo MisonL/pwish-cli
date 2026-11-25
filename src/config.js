@@ -48,7 +48,7 @@ export function saveConfig(patch) {
   return next;
 }
 
-/** passport token 形如 `v2,30996077,482,xxxx`；第二段是 user_id。 */
+/** passport token 形如 `v2,<user_id>,482,<secret>`；第二段是 user_id。 */
 export function userIdOfToken(token) {
   const parts = String(token || "").split(",");
   const id = Number(parts[1]);

@@ -102,7 +102,7 @@ export function createClient(overrides = {}) {
 export function loginWithToken(token) {
   if (!token || !/^v2,/.test(token.trim())) {
     throw new UserError(
-      "token 格式看起来不对。它来自浏览器 localStorage 的 passport_api_token，形如 `v2,30996077,482,xxxx`。",
+      "token 格式看起来不对。它来自浏览器 localStorage 的 passport_api_token，形如 `v2,<user_id>,482,<secret>`。",
       "BAD_TOKEN",
     );
   }
