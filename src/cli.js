@@ -8,7 +8,6 @@ import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
 import { startAuthServer, openBrowser } from "./auth-server.js";
-import { findPassportToken } from "./browser-token.js";
 import { execFileSync } from "node:child_process";
 import { MODELS, RATIOS, SUITE_SCENES, SUITE_SITES, resolveModel, buildImageMessagePayload } from "./models.js";
 import { uploadFiles } from "./upload.js";
@@ -46,20 +45,6 @@ async function persistToken(token, { json: asJson = false } = {}) {
   return 0;
 }
 
-async function tokenFromBrowser(args) {
-  const hits = findPassportToken();
-  if (!hits.length) return false;
-  const hit = hits[0];
-  log(`${dim}从已登录的浏览器（${hit.browser}）读取到登录态`);
-  try {
-    await persistToken(hit.token, { json: args.flags.json });
-    return true;
-  } catch (err) {
-    log(`${yellow}浏览器里的登录态不可用（${err.message}），回退网页授权`);
-    return false;
-  }
-}
-
 async function oauthLogin(args) {
   const timeoutMs = Number(args.flags.timeout || 600) * 1000;
   const auth = await startAuthServer({ timeoutMs, port: Number(args.flags.port || 0) });
@@ -88,10 +73,7 @@ async function cmdLogin(args) {
   let token = args.flags.token || args._[1] || "";
   if (!token && !process.stdin.isTTY && !args.flags.paste) token = await readStdin();
 
-  // 优先从已登录的浏览器直接读取（零交互）；--token/--paste 保留手工入口
-  if (!token && !args.flags.paste && !args.flags["no-browser"]) {
-    if (await tokenFromBrowser(args)) return 0;
-  }
+  // 默认走本机登录页；--token / --paste 供 CI 与无浏览器环境使用
   if (!token && !args.flags.paste) return oauthLogin(args);
 
   if (args.flags.paste) {
@@ -538,9 +520,8 @@ function help() {
   say(`pwish — 佐糖 AI 设计师命令行工具（picwish.cn/ai-design-create）
 
 ${cyan}登录
-  pwish login                    浏览器授权（推荐，本地回环 + PKCE）
-  pwish login --no-browser       不从浏览器读，强制走网页授权
-  pwish login --no-open          只打印授权链接，自己在浏览器打开
+  pwish login                    打开本机登录页（微信扫码 / 账号密码）
+  pwish login --no-open          不自动开浏览器，手动访问打印的链接
   pwish login --token 'v2,...'   CI/无浏览器环境直接给 token
   pwish login --paste            从剪贴板读 token
   pwish whoami                   查看当前账号
@@ -564,6 +545,7 @@ ${cyan}查询与下载
 
 ${cyan}其他
   pwish models                  列出模型/比例/清晰度
+  pwish skill --install         安装 agent skill
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
 
 ${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。

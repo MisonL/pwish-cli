@@ -72,7 +72,7 @@ pwish skill --install    # 安装到 ~/.agents/skills/pwish/SKILL.md
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，46 个用例
+npm test         # node --test，42 个用例
 npm run test:watch
 ```
 
@@ -90,7 +90,6 @@ OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--
 | `src/auth-server.js` | 本机授权服务：登录页 + OAuth 授权码 + PKCE |
 | `src/passport.js` | 官方账号登录接口客户端（扫码 / 密码） |
 | `src/login-page.js` | 自建登录页与结果页（对齐官网视觉） |
-| `src/browser-token.js` | 只读解析 Chromium localStorage（LevelDB + Snappy） |
 | `src/args.js` / `src/output.js` | 参数解析 / 输出与着色（stdout/stderr 分离） |
 | `src/cli.js` | 命令路由与业务编排 |
 | `scripts/check.js` | 零依赖静态自检 |
@@ -260,4 +259,3 @@ pwish skill --install
 - 免费额度生成的图片**带水印**（URL/文件名含 `-wm_`）；去水印需按站点规则付费。
 - 结果图片 URL 是签名链接（约 2 小时），过期需用 `pwish download` 重新拉（会自动重新查询拿新签名）。
 - 接口无公开文档，字段以实测为准；站点改版可能导致失效，`src/models.js` 是模型/比例/场景的单一改点。
-- 读取浏览器 localStorage 依赖磁盘布局，Chromium 大版本改动格式时可能失效（届时回退 OAuth）。
