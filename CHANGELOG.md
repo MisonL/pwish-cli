@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-25
+
+### Added
+
+- `pwish skill` 命令：从 npm 包一键安装 agent skill 到 `~/.agents/skills/pwish`，
+  支持 `--install --dir`、`--showpath`、`--print`
+- README 增加登录页截图与从 npm 安装、skill 安装的完整引导
+
+### Fixed
+
+- Host 头校验正则转义，避免形如 `127x0x0x1` 的伪造主机绕过
+- 参数解析器登记 skill 命令相关 flag
+
 ## [0.1.0] - 2026-11-25
 
 首个公开版本。

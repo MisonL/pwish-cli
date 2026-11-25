@@ -37,12 +37,35 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 
 ## 安装
 
+从 npm 安装（推荐）：
+
 ```bash
-npm i -g pwish-cli     # 从 npm 安装
-# 或在仓库内：npm link
+npm i -g pwish-cli
+pwish --version
 ```
 
-需要 Node.js ≥ 20（使用内置 `fetch`）。**无第三方运行时依赖。**
+无需登录 npm；Node.js ≥ 20（使用内置 `fetch`）。**无第三方运行时依赖。**
+
+也可以免安装直接运行：`npx -y pwish-cli --version`。
+
+### 安装 agent skill
+
+skill 已随 npm 包一起发布，**不需要单独下载仓库**：
+
+```bash
+pwish skill --install    # 安装到 ~/.agents/skills/pwish/SKILL.md
+```
+
+其它用法：
+
+| 命令 | 作用 |
+|---|---|
+| `pwish skill` | 查看安装说明 |
+| `pwish skill --install --dir <目录>` | 安装到指定 agent 技能目录 |
+| `pwish skill --showpath` | 打印内置 skill 文件路径 |
+| `pwish skill --print` | 直接输出 SKILL.md 内容 |
+
+如果 agent 从其他技能目录加载（如 `~/.codex/skills/`），用 `--dir` 指向对应位置即可。
 
 ## 开发与测试
 
@@ -81,7 +104,13 @@ OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--
 pwish login
 ```
 
-命令会在本机 `127.0.0.1` 启动一个**自建登录页**并自动打开浏览器：
+命令会在本机 `127.0.0.1` 启动一个**自建登录页**并自动打开浏览器。视觉对齐佐糖官网登录页：
+
+| 微信扫码 | 密码登录 |
+|---|---|
+| ![微信扫码登录](docs/screenshots/login-qr.png) | ![账号密码登录](docs/screenshots/login-password.png) |
+
+支持两种方式：
 
 - **微信扫码**：页面直接展示官方生成的二维码，手机上确认即可；
 - **密码登录**：手机号或邮箱 + 密码。
@@ -207,11 +236,11 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 
 ## Skill
 
-`skill/pwish/SKILL.md` 是为 agent 准备的用法协议（额度预检、模型选择、套图配方、错误码处理、提示词方法论）。
-安装到 agent 技能目录即可：
+`skill/pwish/SKILL.md` 是为 agent 准备的用法协议（额度预检、模型选择、套图配方、错误码处理、提示词方法论），
+已随 npm 包一起发布。安装方式见上文「安装 agent skill」，最简单的是：
 
 ```bash
-cp -R skill/pwish ~/.agents/skills/pwish
+pwish skill --install
 ```
 
 ## 已知限制

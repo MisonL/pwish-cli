@@ -1,5 +1,8 @@
 import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { parseArgs, readStdin } from "./args.js";
 import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
@@ -181,6 +184,37 @@ function cmdModels(args) {
   say(`\n${cyan}比例: ${RATIOS.join(", ")}`);
   say(`${cyan}清晰度: 1K, 2K, 2K+（--size）`);
   say(`${cyan}模式: economy（经济，默认）, stable（稳定）`);
+  return 0;
+}
+
+function cmdSkill(args) {
+  const builtin = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skill", "pwish", "SKILL.md");
+  const targetDir = args.flags.dir || path.join(os.homedir(), ".agents", "skills", "pwish");
+  const target = path.join(targetDir, "SKILL.md");
+
+  if (!fs.existsSync(builtin)) throw new UserError("当前安装中未包含 skill 文件", "NO_SKILL");
+
+  if (args.flags.print) {
+    say(fs.readFileSync(builtin, "utf8"));
+    return 0;
+  }
+  if (args.flags.showpath) {
+    say(builtin);
+    return 0;
+  }
+  if (args.flags.install) {
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.copyFileSync(builtin, target);
+    log(`${green}✓${reset} skill 已安装 → ${target}`);
+    log(`现在告诉 agent「用 pwish skill 生成一张电商图」即可。`);
+    return 0;
+  }
+
+  say(`${cyan}agent skill 安装${reset}`);
+  say(`  pwish skill --install           安装到 ${target}`);
+  say(`  pwish skill --install --dir DIR 安装到指定目录`);
+  say(`  pwish skill --showpath           打印内置 skill 路径`);
+  say(`  pwish skill --print             直接输出 SKILL.md 内容`);
   return 0;
 }
 
@@ -561,6 +595,8 @@ export async function main(argv) {
       return cmdQuota(args);
     case "models":
       return cmdModels(args);
+    case "skill":
+      return cmdSkill(args);
     case "gen":
     case "draw":
     case "create":

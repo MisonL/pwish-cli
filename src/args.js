@@ -4,13 +4,13 @@ import { UserError } from "./config.js";
 const VALUE_FLAGS = new Set([
   "model", "m", "ratio", "r", "size", "s", "mode", "format", "f", "n", "out", "o",
   "image", "i", "conv", "conversation", "timeout", "poll", "token", "selling", "site",
-  "country", "lang", "scenes", "prompt-file", "limit", "page", "comment", "port",
+  "country", "lang", "scenes", "prompt-file", "limit", "page", "comment", "port", "dir",
 ]);
 
 /** 纯开关（不需要值）。 */
 const BOOLEAN_FLAGS = new Set([
   "json", "no-download", "paste", "stdin", "force", "help", "no-plan", "keep",
-  "no-open", "no-browser", "version", "v",
+  "no-open", "no-browser", "version", "v", "skill", "install", "print", "showpath",
 ]);
 
 /** 短名 → 长名归一化：让 `-m` 与 `--model` 落到同一个 flag 上。 */

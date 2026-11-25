@@ -43,3 +43,25 @@ test("CLI --version 输出版本号", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout.trim(), /^pwish \d+\.\d+\.\d+$/);
 });
+
+test("skill 相关 flag 解析正确", () => {
+  const a = parseArgs(["skill", "--install", "--dir", "/tmp/skills"]);
+  assert.equal(a.flags.install, true);
+  assert.equal(a.flags.dir, "/tmp/skills");
+});
+
+test("CLI skill --install 复制内置 skill 到指定目录", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const fs = await import("node:fs");
+
+  const bin = fileURLToPath(new URL("../bin/pwish.js", import.meta.url));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pwish-skill-"));
+  const r = spawnSync(process.execPath, [bin, "skill", "--install", "--dir", dir], { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  const installed = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8");
+  assert.match(installed, /^---\nname: pwish/m);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

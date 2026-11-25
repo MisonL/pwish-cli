@@ -137,7 +137,8 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
     const url = new URL(req.url, `http://${req.headers.host || host}`);
 
     const hostHeader = String(req.headers.host || "");
-    if (!new RegExp(`^(${host}|localhost):${actualPort}$`).test(hostHeader)) {
+    const esc = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp(`^(${esc(host)}|localhost):${actualPort}$`).test(hostHeader)) {
       res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("forbidden host");
       return;
