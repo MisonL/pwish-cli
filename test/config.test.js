@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "xiutu-test-"));
-process.env.XIUTU_CONFIG_DIR = tmpDir;
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pwish-test-"));
+process.env.PWISH_CONFIG_DIR = tmpDir;
 
 const { loadConfig, saveConfig, userIdOfToken, resolveToken, UserError, CONFIG_PATH } = await import("../src/config.js");
 const { loginWithToken } = await import("../src/api.js");
@@ -28,11 +28,11 @@ test("saveConfig/loadConfig 往返，且文件权限 0600", () => {
 
 test("环境变量覆盖配置文件", () => {
   saveConfig({ token: "v2,1,482,abc" });
-  process.env.XIUTU_TOKEN = "v2,2,482,def";
+  process.env.PWISH_TOKEN = "v2,2,482,def";
   try {
     assert.equal(loadConfig().token, "v2,2,482,def");
   } finally {
-    delete process.env.XIUTU_TOKEN;
+    delete process.env.PWISH_TOKEN;
   }
 });
 

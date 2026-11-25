@@ -1,10 +1,10 @@
 {
-  "name": "xiutu-cli",
+  "name": "pwish-cli",
   "version": "0.1.0",
   "description": "佐糖 AI 设计师（picwish.cn/ai-design-create）命令行工具：一句话出电商图、套图、详情图",
   "type": "module",
   "bin": {
-    "xiutu": "bin/xiutu.js"
+    "pwish": "bin/pwish.js"
   },
   "engines": {
     "node": ">=20"

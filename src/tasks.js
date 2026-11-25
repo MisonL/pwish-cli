@@ -25,7 +25,7 @@ export async function pollTask(client, fetcher, { timeoutMs = 300_000, intervalM
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   if (last && (Number(last.state) === 1 || Number(last.progress) === 100)) return last;
-  throw new Error(`等待超时（${Math.round(timeoutMs / 1000)}s）。任务可能仍在服务端排队，稍后用 \`xiutu task <task_id>\` 查询。`);
+  throw new Error(`等待超时（${Math.round(timeoutMs / 1000)}s）。任务可能仍在服务端排队，稍后用 \`pwish task <task_id>\` 查询。`);
 }
 
 export async function createConversation(client) {

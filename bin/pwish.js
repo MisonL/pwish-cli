@@ -13,11 +13,11 @@ try {
     process.exitCode = 2;
   } else if (err instanceof ApiError) {
     process.stderr.write(`\u001b[31m✗ ${err.message}\u001b[0m\n`);
-    if (process.env.XIUTU_DEBUG) process.stderr.write(`${JSON.stringify(err.payload, null, 2)}\n`);
+    if (process.env.PWISH_DEBUG) process.stderr.write(`${JSON.stringify(err.payload, null, 2)}\n`);
     process.exitCode = err.code === "UNAUTHORIZED" || err.code === "NO_TOKEN" ? 3 : 1;
   } else {
     process.stderr.write(`\u001b[31m✗ ${err?.message || err}\u001b[0m\n`);
-    if (process.env.XIUTU_DEBUG) process.stderr.write(`${err?.stack}\n`);
+    if (process.env.PWISH_DEBUG) process.stderr.write(`${err?.stack}\n`);
     process.exitCode = 1;
   }
 }

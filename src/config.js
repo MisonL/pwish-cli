@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 const HOME = os.homedir();
-export const CONFIG_DIR = process.env.XIUTU_CONFIG_DIR || path.join(HOME, ".config", "xiutu");
+export const CONFIG_DIR = process.env.PWISH_CONFIG_DIR || path.join(HOME, ".config", "pwish");
 export const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 const DEFAULTS = {
@@ -22,9 +22,9 @@ export function loadConfig() {
     file = {};
   }
   const cfg = { ...DEFAULTS, ...file };
-  if (process.env.XIUTU_TOKEN) cfg.token = process.env.XIUTU_TOKEN;
-  if (process.env.XIUTU_API_BASE) cfg.apiBase = process.env.XIUTU_API_BASE;
-  if (process.env.XIUTU_OUT) cfg.outDir = process.env.XIUTU_OUT;
+  if (process.env.PWISH_TOKEN) cfg.token = process.env.PWISH_TOKEN;
+  if (process.env.PWISH_API_BASE) cfg.apiBase = process.env.PWISH_API_BASE;
+  if (process.env.PWISH_OUT) cfg.outDir = process.env.PWISH_OUT;
   return cfg;
 }
 
@@ -53,7 +53,7 @@ export function resolveToken(cfg) {
   const token = (cfg?.token || "").trim();
   if (!token) {
     throw new UserError(
-      "尚未登录。先执行 `xiutu login` 粘贴浏览器里的 passport_api_token，或设置环境变量 XIUTU_TOKEN。",
+      "尚未登录。先执行 `pwish login` 粘贴浏览器里的 passport_api_token，或设置环境变量 PWISH_TOKEN。",
       "NO_TOKEN",
     );
   }

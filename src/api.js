@@ -12,7 +12,7 @@ export const API_ERRORS = {
   15558: ["FREE_PREVIEW_LIMIT_EXCEEDED", "免费预览次数已用完"],
   15500: ["TASK_NOT_FOUND", "任务不存在"],
   15021: ["TASK_EXPIRED", "任务已过期（超过 1 小时）"],
-  401: ["UNAUTHORIZED", "登录态失效，请重新执行 `xiutu login`"],
+  401: ["UNAUTHORIZED", "登录态失效，请重新执行 `pwish login`"],
 };
 
 export class ApiError extends Error {

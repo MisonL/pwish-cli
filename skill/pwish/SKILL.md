@@ -1,49 +1,53 @@
 ---
-name: xiutu
-description: 用 `xiutu` 命令行工具调用佐糖 AI 设计师（picwish.cn/ai-design-create）做电商图：一句话生图、商品图换场景、白底主图、电商套图/详情图，并把结果下载到本地。当用户要生成商品图、电商图、白底图、场景图、模特图、套图，或提到佐糖/picwish/AI 设计师/一句话出图时使用。
+name: pwish
+description: 用 `pwish` 命令行工具调用佐糖 AI 设计师（picwish.cn/ai-design-create）做电商图：一句话生图、商品图换场景、白底主图、电商套图/详情图，并把结果下载到本地。当用户要生成商品图、电商图、白底图、场景图、模特图、套图，或提到佐糖/picwish/AI 设计师/一句话出图时使用。
 ---
 
-# 佐糖 AI 设计师（xiutu CLI）
+# 佐糖 AI 设计师（pwish CLI）
 
-本 skill 让你通过 `xiutu` 命令行出电商图。生成能力来自 picwish 网页版同源接口，
+本 skill 让你通过 `pwish` 命令行出电商图。生成能力来自 picwish 网页版同源接口，
 算粒/额度按账号走，生成图片**默认带水印**（免费额度）。
 
 ## 0. 开工前检查（每次都做）
 
 ```bash
-xiutu whoami   # 有用户 ID 说明登录态可用；报错则按 §1 登录
-xiutu quota    # 看免费额度；额度为 0 时不要盲目提交，先告知用户
+pwish whoami   # 有用户 ID 说明登录态可用；报错则按 §1 登录
+pwish quota    # 看免费额度；额度为 0 时不要盲目提交，先告知用户
 ```
 
 - `whoami` 失败（退出码 3）→ 走 §1 登录。
 - `quota` 中目标模型的次数为 0 → 直接告诉用户「该模型免费次数已用完，需要算粒/会员」，不要硬跑。
 - 不要自己猜 API、不要直接用 curl 打接口：CLI 已经封装了上传、轮询、下载与错误码。
 
-## 1. 登录（一次性，token 长期有效）
-
-token 就是网页版 localStorage 里的 `passport_api_token`，形如 `v2,30996077,482,xxxx`。
+## 1. 登录（通常零交互）
 
 ```bash
-xiutu login --paste       # 推荐：从剪贴板读
-xiutu login 'v2,...'      # 或直接传
-echo 'v2,...' | xiutu login
+pwish login
 ```
 
-让用户这样取 token：浏览器登录 <https://picwish.cn/ai-design-create> → DevTools Console →
-`copy(localStorage.getItem('passport_api_token'))`。
+按优先级自动选路径：
+1. **读已登录浏览器**（默认）：从本机 Chrome/Edge/Brave/Ego Lite 等的 localStorage 只读提取佐糖 token。
+   用户只要在浏览器登录过佐糖，就什么都不用做。
+2. **网页 OAuth 兜底**：读不到时在本地回环起服务走 OAuth 授权码 + PKCE（只监听 127.0.0.1），
+   浏览器里拖一个授权书签、在佐糖页面点一下即可。
+3. **手工**：`pwish login --token 'v2,...'`、`--paste`（CI/无浏览器环境）。
+   取 token：浏览器登录 <https://picwish.cn/ai-design-create> → Console →
+   `copy(localStorage.getItem('passport_api_token'))`。
 
-登录态存在 `~/.config/xiutu/config.json`（0600）。**不要**把 token 写进仓库、日志或最终回答。
+`pwish login --no-browser` 可强制跳过浏览器读取、走网页授权。
 
-## 2. 一句话出图：`xiutu gen`
+登录态存 `~/.config/pwish/config.json`（0600）。**不要**把 token 写进仓库、日志或最终回答。
+
+## 2. 一句话出图：`pwish gen`
 
 ```bash
-xiutu gen "<提示词>" [-i 参考图 ...] [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 目录]
+pwish gen "<提示词>" [-i 参考图 ...] [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 目录]
 ```
 
 | 参数 | 取值 | 说明 |
 |---|---|---|
 | `-i/--image` | 本地文件路径，可重复 | 参考图（商品原图）。会先上传拿 resource_id |
-| `-m/--model` | `gemini-3`(默认) `nano-banana-pro` `nano-banana-2-lite` `gpt-image-2` `gpt-image-1.5` `seedream-5-pro` … | `xiutu models` 看全表 |
+| `-m/--model` | `gemini-3`(默认) `nano-banana-pro` `nano-banana-2-lite` `gpt-image-2` `gpt-image-1.5` `seedream-5-pro` … | `pwish models` 看全表 |
 | `-r/--ratio` | `auto`(默认) `1:1` `3:4` `4:3` `9:16` `16:9` `2:3` `3:2` | 参考图是商品图时，`1:1` 最稳妥 |
 | `-s/--size` | `1K` `2K`(默认) `2K+` | 实际像素由比例×档位决定，2K 约 2048px |
 | `--mode` | `economy`(默认，便宜) `stable`(稳定，贵) | 细节要求高时用 stable |
@@ -56,12 +60,12 @@ xiutu gen "<提示词>" [-i 参考图 ...] [-m 模型] [-r 比例] [-s 2K] [--mo
 - **纯文生图、无参考图**：`gpt-image-2` 或 `seedream-5-pro` 性价比高。
 - 先用 `nano-banana-2-lite` 试构图，满意再换 `gemini-3` 出终稿，省额度。
 
-## 3. 电商套图：`xiutu suite`（最常用）
+## 3. 电商套图：`pwish suite`（最常用）
 
 一张商品图 → AI 写各场景提示词 → 批量出一套电商图。
 
 ```bash
-xiutu suite -i ./product.jpg \
+pwish suite -i ./product.jpg \
   --selling "简约白瓷马克杯 350ml，可微波加热，适合办公室" \
   --site amazon --scenes main,selling,material -o out/
 ```
@@ -83,11 +87,11 @@ xiutu suite -i ./product.jpg \
 ## 4. 结果查询与重下
 
 ```bash
-xiutu history [--limit 20]        # 历史会话（30 天内）
-xiutu show <conversation_id>      # 会话里每条任务与图片 URL
-xiutu task <task_id> [...]        # 任务状态（state=1 完成）
-xiutu download <task_id|conversation_id> -o dir   # 重新下载（OSS URL 会过期，及时下）
-xiutu queue                       # 服务端队列状态
+pwish history [--limit 20]        # 历史会话（30 天内）
+pwish show <conversation_id>      # 会话里每条任务与图片 URL
+pwish task <task_id> [...]        # 任务状态（state=1 完成）
+pwish download <task_id|conversation_id> -o dir   # 重新下载（OSS URL 会过期，及时下）
+pwish queue                       # 服务端队列状态
 ```
 
 ## 5. 出错怎么办
@@ -98,8 +102,8 @@ xiutu queue                       # 服务端队列状态
 | `DAILY_LIMIT_EXCEEDED` | 今日免费额度用完，换模型或明天再试 |
 | `INVALID_WORDS` / `IMAGE_POLICY_VIOLATION` | 提示词/图片违规。**改写提示词**（去掉品牌名、真人明星、敏感词），不要原样重试 |
 | `SENSITIVE_IMAGE` | 参考图被判敏感，换一张图 |
-| `UNAUTHORIZED` / 退出码 3 | 登录态过期 → 重新 `xiutu login` |
-| 等待超时（退出码 1） | 任务还在排队：用 `xiutu task <id>` 或 `xiutu queue` 看，别重复提交 |
+| `UNAUTHORIZED` / 退出码 3 | 登录态过期 → 重新 `pwish login` |
+| 等待超时（退出码 1） | 任务还在排队：用 `pwish task <id>` 或 `pwish queue` 看，别重复提交 |
 | `INVALID_PARAM` | 参数不对：检查 `--ratio/--size/--scenes` 取值 |
 
 ## 6. 提示词方法论（决定成图质量）
@@ -123,14 +127,14 @@ xiutu queue                       # 服务端队列状态
 
 ```bash
 # 白底主图（淘宝/京东）
-xiutu gen "纯白色背景，商品居中占画面85%，柔和影棚光，高细节，电商主图" -i ./p.jpg -m gpt-image-2 -r 1:1 -s 2K
+pwish gen "纯白色背景，商品居中占画面85%，柔和影棚光，高细节，电商主图" -i ./p.jpg -m gpt-image-2 -r 1:1 -s 2K
 
 # 场景图（亚马逊）
-xiutu gen "现代木质餐桌场景，自然侧光，浅灰背景留白，商品居中偏右，商业摄影质感" -i ./p.jpg -m gemini-3 -r 1:1 -s 2K
+pwish gen "现代木质餐桌场景，自然侧光，浅灰背景留白，商品居中偏右，商业摄影质感" -i ./p.jpg -m gemini-3 -r 1:1 -s 2K
 
 # 九宫格备选：同提示词一次出 3 张
-xiutu gen "白底商品图，柔和阴影" -i ./p.jpg -n 3 -o out/v1
+pwish gen "白底商品图，柔和阴影" -i ./p.jpg -n 3 -o out/v1
 
 # 全套电商套图
-xiutu suite -i ./p1.jpg -i ./p2.jpg --selling "不锈钢保温杯 500ml，24小时保温，防漏盖，适合通勤" --site amazon --scenes main,core,selling,material,person
+pwish suite -i ./p1.jpg -i ./p2.jpg --selling "不锈钢保温杯 500ml，24小时保温，防漏盖，适合通勤" --site amazon --scenes main,core,selling,material,person
 ```
