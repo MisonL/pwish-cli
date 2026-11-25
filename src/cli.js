@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import os from "node:os";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
@@ -601,9 +602,15 @@ ${DIM}接口来自 picwish 网页版同源 API，生成图片带水印（免费�
   return 0;
 }
 
+const require = createRequire(import.meta.url);
+
 export async function main(argv) {
   const args = parseArgs(argv);
   const cmd = args._[0] || "help";
+  if (args.flags.version || args.flags.v || cmd === "--version" || cmd === "-v") {
+    say(`pwish ${require("../package.json").version}`);
+    return 0;
+  }
   if (args.flags.help || cmd === "help" || cmd === "--help") return help();
 
   switch (cmd) {

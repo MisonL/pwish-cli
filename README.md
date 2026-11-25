@@ -8,13 +8,33 @@
 ## 安装
 
 ```bash
-git clone <this-repo> ~/tools/pwish-cli
-cd ~/tools/pwish-cli
-npm link            # 或者把 bin/pwish.js 加进 PATH
+cd /path/to/pwish-cli      # 本仓库所在目录
+npm link                   # 全局注册 pwish 命令（或把 bin/pwish.js 加进 PATH）
 pwish help
 ```
 
-需要 Node.js ≥ 20（用到内置 `fetch`）。无第三方依赖。
+需要 Node.js ≥ 20（用到内置 `fetch`）。**零第三方依赖**——包括读取浏览器 localStorage 的
+LevelDB/Snappy 解析，全部是内置实现。
+
+## 开发与测试
+
+```bash
+npm test        # node --test，37 个用例
+```
+
+覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、OAuth 授权码/PKCE/CSRF/Host 防护、
+Snappy 解压与 varint 解码。**测试不产生任何 API 请求、不消耗额度。**
+
+| 文件 | 职责 |
+|---|---|
+| `src/api.js` | 同源接口客户端（Bearer、错误码映射、超时） |
+| `src/upload.js` | OSS STS 上传（V1 签名 + `x-oss-callback` 换 resource_id） |
+| `src/tasks.js` | 建会话 / 建任务 / 批量轮询 / 下载 / 历史 / 队列 |
+| `src/suite.js` | 电商套图两步流程（AI 写提示词 → 批量出图） |
+| `src/models.js` | **模型表、比例尺寸表、场景表、payload 构造（改版时的主要改点）** |
+| `src/oauth.js` | 自建 OAuth2 授权码 + PKCE 回环服务 |
+| `src/browser-token.js` | 只读解析 Chromium localStorage（LevelDB + Snappy） |
+| `src/cli.js` | 命令层与参数解析 |
 
 ## 登录
 
@@ -90,7 +110,9 @@ pwish download <task_id|conversation_id> [-o 目录]
 pwish queue
 ```
 
-全局开关：`--json`（机器可读）、`-o/--out`（输出目录，默认 `out/`）。
+全局开关：`--json`（机器可读）、`-o/--out`（输出目录，默认 `out/`）、`--version`（版本号）。
+
+`--mode` 支持 `economy`（默认）与 `stable`；**`stable` 参数会正确下发但尚未实测**出图效果与计费差异。
 
 ## 例子
 
@@ -98,7 +120,7 @@ pwish queue
 # 白底主图
 pwish gen "纯白色背景，商品居中占画面85%，柔和影棚光，高细节" -i ./mug.jpg -m gpt-image-2 -r 1:1 -s 2K
 
-# 电商套图：亚马逊，7 个场景里的 3 个
+# 电商套图：亚马逊，5 个可用场景里的 3 个
 pwish suite -i ./mug.jpg --selling "简约白瓷马克杯 350ml，可微波加热" \
   --site amazon --scenes main,selling,material
 
@@ -123,6 +145,11 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 | `flux` | 1 | FLUX |
 
 比例：`auto 1:1 2:3 3:2 3:4 4:3 9:16 16:9`；清晰度：`1K 2K 2K+`（→ standard/high/super）。
+
+### 场景（`--scenes`）
+
+电商套图支持 5 个场景，均已实测：`main`(白底主图) `core`(核心卖点图) `selling`(卖点图) `material`(材质图) `person`(模特展示图)。
+站点 UI 还有「场景展示图」「多场景拼图」两个选项，其接口枚举值尚未逆向确认，CLI 暂不支持。
 
 ## 接口（逆向所得，可能随站点更新变化）
 
@@ -154,6 +181,19 @@ cp -R skill/pwish ~/.agents/skills/pwish
 
 ## 已知限制
 
+**能力边界**（没做 / 没验证，不要当成能用）：
+
+- **详情图（电商详情图）未实现**：站点有该功能，但其接口走的是独立前端 chunk，尚未逆向，无对应命令。
+- **视频生成未实现**：接口存在（`tasks/login/video-messages`），未验证也未封装。
+- **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
+- **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
+- **浏览器直读仅限 Chromium 系**：Chrome / Edge / Brave / Chromium / Arc / Vivaldi / Ego Lite 可用；
+  **Safari 与 Firefox 不支持**，会自动回退到网页 OAuth。
+- **上传单文件上限 20MB**（CLI 侧保护）。实际站点限制未逐一验证。
+
+**产品与环境限制**：
+
 - 免费额度生成的图片**带水印**（URL/文件名含 `-wm_`）；去水印需按站点规则付费。
-- 结果图片 URL 是签名链接，过期需用 `pwish download` 重新拉（会自动重新查询拿新签名）。
-- 接口无公开文档，字段以实测为准；站点改版可能导致失效，`src/models.js` 是模型/比例的单一改点。
+- 结果图片 URL 是签名链接（约 2 小时），过期需用 `pwish download` 重新拉（会自动重新查询拿新签名）。
+- 接口无公开文档，字段以实测为准；站点改版可能导致失效，`src/models.js` 是模型/比例/场景的单一改点。
+- 读取浏览器 localStorage 依赖磁盘布局，Chromium 大版本改动格式时可能失效（届时回退 OAuth）。
