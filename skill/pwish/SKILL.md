@@ -1,6 +1,6 @@
 ---
 name: pwish
-description: 用 `pwish` 命令行工具调用佐糖 AI 设计师（picwish.cn/ai-design-create）做电商图：一句话生图、商品图换场景、白底主图、电商套图/详情图，并把结果下载到本地。当用户要生成商品图、电商图、白底图、场景图、模特图、套图，或提到佐糖/picwish/AI 设计师/一句话出图时使用。
+description: 用 `pwish` 命令行工具调用佐糖 AI 设计师（picwish.cn/ai-design-create）做电商图：一句话生图、商品图换场景、白底主图、电商套图，并把结果下载到本地。当用户要生成商品图、电商图、白底图、场景图、模特图、套图，或提到佐糖/picwish/AI 设计师/一句话出图时使用。
 ---
 
 # 佐糖 AI 设计师（pwish CLI）
