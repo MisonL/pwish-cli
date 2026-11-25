@@ -19,11 +19,15 @@ LevelDB/Snappy 解析，全部是内置实现。
 ## 开发与测试
 
 ```bash
-npm test        # node --test，37 个用例
+npm run verify   # = npm run check + npm test（CI 同一套）
+npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
+npm test         # node --test，44 个用例
+npm run test:watch
 ```
 
-覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、OAuth 授权码/PKCE/CSRF/Host 防护、
-Snappy 解压与 varint 解码。**测试不产生任何 API 请求、不消耗额度。**
+测试覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、参数解析、
+OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--version`。
+**测试不产生任何 API 请求、不消耗额度。** CI（`.github/workflows/ci.yml`）在 Node 20 / 22 上跑同一套。
 
 | 文件 | 职责 |
 |---|---|
@@ -34,7 +38,12 @@ Snappy 解压与 varint 解码。**测试不产生任何 API 请求、不消耗�
 | `src/models.js` | **模型表、比例尺寸表、场景表、payload 构造（改版时的主要改点）** |
 | `src/oauth.js` | 自建 OAuth2 授权码 + PKCE 回环服务 |
 | `src/browser-token.js` | 只读解析 Chromium localStorage（LevelDB + Snappy） |
-| `src/cli.js` | 命令层与参数解析 |
+| `src/args.js` / `src/output.js` | 参数解析 / 输出与着色（stdout/stderr 分离） |
+| `src/cli.js` | 命令路由与业务编排 |
+| `scripts/check.js` | 零依赖静态自检 |
+| `test/` | 单元与 CLI 冒烟测试 |
+
+版本与变更记录见 `CHANGELOG.md`；许可证见 `LICENSE`（MIT + 非官方工具免责声明）。
 
 ## 登录
 

@@ -16,10 +16,16 @@ const DEFAULTS = {
 
 export function loadConfig() {
   let file = {};
-  try {
-    file = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-  } catch {
-    file = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      file = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+      if (!file || typeof file !== "object" || Array.isArray(file)) throw new Error("格式不正确");
+    } catch (err) {
+      throw new UserError(
+        `配置文件损坏：${CONFIG_PATH}（${err.message}）。请删除该文件后重新执行 pwish login。`,
+        "BAD_CONFIG",
+      );
+    }
   }
   const cfg = { ...DEFAULTS, ...file };
   if (process.env.PWISH_TOKEN) cfg.token = process.env.PWISH_TOKEN;
@@ -53,7 +59,7 @@ export function resolveToken(cfg) {
   const token = (cfg?.token || "").trim();
   if (!token) {
     throw new UserError(
-      "尚未登录。先执行 `pwish login` 粘贴浏览器里的 passport_api_token，或设置环境变量 PWISH_TOKEN。",
+      "尚未登录。先执行 `pwish login`（会自动读取已登录浏览器），或设置环境变量 PWISH_TOKEN。",
       "NO_TOKEN",
     );
   }

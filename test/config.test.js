@@ -71,6 +71,14 @@ test("OSS V1 签名与手工计算一致", async () => {
   assert.equal(typeof uploadFile, "function");
 });
 
+
+test("损坏的配置文件给出明确错误", async () => {
+  const { loadConfig } = await import("../src/config.js");
+  fs.writeFileSync(CONFIG_PATH, "{not json", { mode: 0o600 });
+  assert.throws(() => loadConfig(), (err) => err instanceof UserError && err.code === "BAD_CONFIG");
+  fs.rmSync(CONFIG_PATH);
+});
+
 test.after(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });

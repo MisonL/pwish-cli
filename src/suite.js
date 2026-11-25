@@ -1,4 +1,4 @@
-import { buildImageMessagePayload, dimensionFor, SIZE_TO_QUALITY, SUITE_SITES, SUITE_SCENES, resolveModel } from "./models.js";
+import { dimensionFor, SIZE_TO_QUALITY, SUITE_SITES, SUITE_SCENES, resolveModel } from "./models.js";
 import { uploadFiles } from "./upload.js";
 import { pollTask, createConversation, waitForTasks, imagesOf } from "./tasks.js";
 

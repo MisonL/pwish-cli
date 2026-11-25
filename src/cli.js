@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
-import os from "node:os";
+import { parseArgs, readStdin } from "./args.js";
+import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
 import { startLoopbackAuth, openBrowser } from "./oauth.js";
@@ -23,87 +23,6 @@ import {
 } from "./tasks.js";
 import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
 
-const CYAN = process.stdout.isTTY ? "\u001b[36m" : "";
-const GREEN = process.stdout.isTTY ? "\u001b[32m" : "";
-const YELLOW = process.stdout.isTTY ? "\u001b[33m" : "";
-const DIM = process.stdout.isTTY ? "\u001b[2m" : "";
-const RESET = process.stdout.isTTY ? "\u001b[0m" : "";
-
-function log(msg) {
-  process.stderr.write(`${msg}\n`);
-}
-function say(msg) {
-  process.stdout.write(`${msg}\n`);
-}
-function json(obj) {
-  process.stdout.write(`${JSON.stringify(obj, null, 2)}\n`);
-}
-
-/* ------------------------------- arg parsing ------------------------------ */
-
-function parseArgs(argv) {
-  const args = { _: [], flags: {} };
-  const takesValue = new Set([
-    "model", "m", "ratio", "r", "size", "s", "mode", "format", "f", "n", "out", "o",
-    "image", "i", "conv", "conversation", "timeout", "poll", "token", "selling", "site",
-    "country", "lang", "scenes", "prompt-file", "limit", "page", "comment", "port",
-  ]);
-  for (let idx = 0; idx < argv.length; idx += 1) {
-    const a = argv[idx];
-    if (a === "--") {
-      args._.push(...argv.slice(idx + 1));
-      break;
-    }
-    if (a.startsWith("--")) {
-      const [rawKey, inline] = a.slice(2).split("=");
-      const key = rawKey.trim();
-      if (inline !== undefined) {
-        args.flags[key] = inline;
-      } else if (key === "json" || key === "no-download" || key === "paste" || key === "stdin" || key === "force" || key === "help" || key === "no-plan" || key === "keep" || key === "no-open") {
-        args.flags[key] = true;
-      } else if (takesValue.has(key)) {
-        const next = argv[idx + 1];
-        if (next === undefined || next.startsWith("-")) throw new UserError(`--${key} 需要一个值`);
-        args.flags[key] = next;
-        idx += 1;
-      } else {
-        args.flags[key] = true;
-      }
-    } else if (a.startsWith("-") && a.length > 1) {
-      const key = a.slice(1);
-      if (takesValue.has(key)) {
-        const next = argv[idx + 1];
-        if (next === undefined) throw new UserError(`-${key} 需要一个值`);
-        if (key === "i") {
-          args.flags.image = [...(args.flags.image || []), next];
-        } else {
-          args.flags[key] = next;
-        }
-        idx += 1;
-      } else if (key === "n") {
-        args.flags.n = argv[++idx];
-      } else {
-        args.flags[key] = true;
-      }
-    } else {
-      args._.push(a);
-    }
-  }
-  return args;
-}
-
-function readStdin() {
-  if (process.stdin.isTTY) return Promise.resolve("");
-  return new Promise((resolve) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => {
-      data += c;
-    });
-    process.stdin.on("end", () => resolve(data.trim()));
-  });
-}
-
 /* -------------------------------- commands -------------------------------- */
 
 async function persistToken(token, { json: asJson = false } = {}) {
@@ -117,7 +36,7 @@ async function persistToken(token, { json: asJson = false } = {}) {
     json({ ok: true, tokenSavedTo: CONFIG_PATH, userId, vip: Boolean(data.vip) });
     return 0;
   }
-  say(`${GREEN}✓ 登录态已保存${RESET} → ${CONFIG_PATH}`);
+  say(`${green}✓ 登录态已保存 → ${CONFIG_PATH}`);
   say(`  用户 ID: ${userId ?? "未知"}    会员: ${data.vip ? "是" : "否"}`);
   return 0;
 }
@@ -126,12 +45,12 @@ async function tokenFromBrowser(args) {
   const hits = findPassportToken();
   if (!hits.length) return false;
   const hit = hits[0];
-  log(`${DIM}从已登录的浏览器（${hit.browser}）读取到登录态${RESET}`);
+  log(`${dim}从已登录的浏览器（${hit.browser}）读取到登录态`);
   try {
     await persistToken(hit.token, { json: args.flags.json });
     return true;
   } catch (err) {
-    log(`${YELLOW}浏览器里的登录态不可用（${err.message}），回退网页授权${RESET}`);
+    log(`${yellow}浏览器里的登录态不可用（${err.message}），回退网页授权`);
     return false;
   }
 }
@@ -139,8 +58,8 @@ async function tokenFromBrowser(args) {
 async function oauthLogin(args) {
   const timeoutMs = Number(args.flags.timeout || 300) * 1000;
   const auth = await startLoopbackAuth({ timeoutMs, port: Number(args.flags.port || 0) });
-  log(`${CYAN}已开启本地授权服务${RESET} http://127.0.0.1:${auth.port}`);
-  log(`${DIM}OAuth 2.0 授权码 + PKCE(S256) · 仅监听 127.0.0.1 · 等待上限 ${Math.round(timeoutMs / 60000)} 分钟${RESET}`);
+  log(`${cyan}已开启本地授权服务 http://127.0.0.1:${auth.port}`);
+  log(`${dim}OAuth 2.0 授权码 + PKCE(S256) · 仅监听 127.0.0.1 · 等待上限 ${Math.round(timeoutMs / 60000)} 分钟`);
   log("");
 
   const opened = args.flags["no-open"] ? false : await openBrowser(auth.authorizeUrl);
@@ -150,7 +69,7 @@ async function oauthLogin(args) {
     log("无法自动打开浏览器，请手动访问：");
     log(`  ${auth.authorizeUrl}`);
   }
-  log(`${DIM}不方便用书签？授权页里也提供粘贴 token 的方式。${RESET}`);
+  log(`${dim}不方便用书签？授权页里也提供粘贴 token 的方式。`);
 
   try {
     const { token } = await auth.waitForToken();
@@ -229,23 +148,23 @@ async function cmdQuota(args) {
   ].filter(([, v]) => v !== undefined);
 
   if (args.flags.json) return json({ vip: Boolean(data.vip), userId: userIdOfToken(client.token), groups: Object.fromEntries(groups) }), 0;
-  say(`${CYAN}免费额度${RESET}（0 表示该模型免费次数已用完，需要算粒/会员）`);
+  say(`${cyan}免费额度（0 表示该模型免费次数已用完，需要算粒/会员）`);
   for (const [label, value] of groups) {
-    say(`  ${String(label).padEnd(28)} ${value > 0 ? GREEN + value + RESET : DIM + value + RESET}`);
+    say(`  ${String(label).padEnd(28)} ${value > 0 ? green + value + reset : dim + value + reset}`);
   }
-  say(`${DIM}会员：${data.vip ? "是" : "否"}${RESET}`);
+  say(`${dim}会员：${data.vip ? "是" : "否"}`);
   return 0;
 }
 
 function cmdModels(args) {
   if (args.flags.json) return json(MODELS), 0;
-  say(`${CYAN}可用模型${RESET}（-m / --model 取值）`);
+  say(`${cyan}可用模型（-m / --model 取值）`);
   for (const [key, m] of Object.entries(MODELS)) {
     say(`  ${key.padEnd(20)} ${String(m.id).padEnd(5)} ${m.label}`);
   }
-  say(`\n${CYAN}比例${RESET}: ${RATIOS.join(", ")}`);
-  say(`${CYAN}清晰度${RESET}: 1K, 2K, 2K+（--size）`);
-  say(`${CYAN}模式${RESET}: economy（经济，默认）, stable（稳定）`);
+  say(`\n${cyan}比例: ${RATIOS.join(", ")}`);
+  say(`${cyan}清晰度: 1K, 2K, 2K+（--size）`);
+  say(`${cyan}模式: economy（经济，默认）, stable（稳定）`);
   return 0;
 }
 
@@ -273,7 +192,7 @@ async function cmdGen(args) {
 
   let files = [];
   if (images.length) {
-    log(`${DIM}上传 ${images.length} 张参考图…${RESET}`);
+    log(`${dim}上传 ${images.length} 张参考图…`);
     files = (await uploadFiles(client, images)).map((f) => f.resourceId);
   }
 
@@ -298,14 +217,14 @@ async function cmdGen(args) {
   for (let i = 0; i < count; i += 1) {
     const created = await createImageMessage(client, payload);
     tasks.push(created.task_id);
-    log(`${DIM}已提交 ${i + 1}/${count} · task ${created.task_id}${RESET}`);
+    log(`${dim}已提交 ${i + 1}/${count} · task ${created.task_id}`);
   }
 
-  log(`${DIM}等待生成（模型 ${model.key}，比例 ${ratio}，${sizeName}，${pattern}）…${RESET}`);
+  log(`${dim}等待生成（模型 ${model.key}，比例 ${ratio}，${sizeName}，${pattern}）…`);
   const done = await waitForTasks(client, tasks, {
     timeoutMs,
     onProgress: ({ taskId, state, progress }) => {
-      if (progress > 0) log(`${DIM}  ${taskId.slice(0, 8)} ${progress}%${RESET}`);
+      if (progress > 0) log(`${dim}  ${taskId.slice(0, 8)} ${progress}%`);
     },
   });
 
@@ -346,9 +265,9 @@ async function cmdGen(args) {
     return okCount === results.length ? 0 : 7;
   }
 
-  say(`${GREEN}✓ 完成 ${okCount}/${results.length} 张${RESET}  会话: ${conversations}`);
-  for (const d of downloaded) say(`  ${d.file} ${DIM}(${(d.bytes / 1024).toFixed(0)} KB)${RESET}`);
-  for (const r of results.filter((x) => !x.ok)) say(`  ${YELLOW}! ${r.taskId} 失败: ${r.error || "无图片返回"}${RESET}`);
+  say(`${green}✓ 完成 ${okCount}/${results.length} 张  会话: ${conversations}`);
+  for (const d of downloaded) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
+  for (const r of results.filter((x) => !x.ok)) say(`  ${yellow}! ${r.taskId} 失败: ${r.error || "无图片返回"}`);
   if (args.flags["no-download"]) {
     for (const r of results) for (const img of r.images) say(`  ${img.url}`);
   }
@@ -376,14 +295,14 @@ async function cmdSuite(args) {
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
 
-  log(`${DIM}上传 ${images.length} 张商品图…${RESET}`);
+  log(`${dim}上传 ${images.length} 张商品图…`);
   const uploaded = await uploadFiles(client, images);
   const resourceIds = uploaded.map((u) => u.resourceId);
 
   let sellingPoints = selling;
   let prompts = {};
   if (!args.flags["no-plan"]) {
-    log(`${DIM}AI 正在根据商品图写各场景提示词…${RESET}`);
+    log(`${dim}AI 正在根据商品图写各场景提示词…`);
     const plan = await planSuitePrompts(client, {
       resourceIds,
       sellingPoints: selling || "（未提供卖点，请根据图片合理推断产品名称与核心卖点）",
@@ -395,10 +314,10 @@ async function cmdSuite(args) {
     });
     prompts = plan.prompts || {};
     if (!sellingPoints && plan.raw?.selling_points) sellingPoints = plan.raw.selling_points;
-    log(`${DIM}已生成 ${Object.keys(prompts).length} 个场景提示词${RESET}`);
+    log(`${dim}已生成 ${Object.keys(prompts).length} 个场景提示词`);
   }
 
-  log(`${DIM}开始出图（${sceneList.join(", ")} · ${model.key} · ${sizeName}）…${RESET}`);
+  log(`${dim}开始出图（${sceneList.join(", ")} · ${model.key} · ${sizeName}）…`);
   const out = await generateSuite(client, {
     resourceIds,
     sellingPoints,
@@ -414,7 +333,7 @@ async function cmdSuite(args) {
     conversationId: args.flags.conv || args.flags.conversation,
     timeoutMs,
     onProgress: ({ state, progress }) => {
-      if (progress > 0) log(`${DIM}  ${progress}%${RESET}`);
+      if (progress > 0) log(`${dim}  ${progress}%`);
     },
   });
 
@@ -451,8 +370,8 @@ async function cmdSuite(args) {
     return 0;
   }
 
-  say(`${GREEN}✓ 套图完成 ${total} 张${RESET}  会话: ${out.conversationId}`);
-  for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${DIM}(${(d.bytes / 1024).toFixed(0)} KB)${RESET}`);
+  say(`${green}✓ 套图完成 ${total} 张  会话: ${out.conversationId}`);
+  for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   return 0;
 }
 
@@ -478,7 +397,7 @@ async function cmdTask(args) {
   if (args.flags.json) return json(out), 0;
   for (const r of out) {
     if (!r.found) {
-      say(`${YELLOW}${r.taskId} 未找到${RESET}`);
+      say(`${yellow}${r.taskId} 未找到`);
       continue;
     }
     say(`${r.taskId}  state=${r.state} progress=${r.progress}%  ${r.error || ""}`);
@@ -495,7 +414,7 @@ async function cmdHistory(args) {
   if (!items.length) return say("暂无历史会话"), 0;
   for (const it of items) {
     const when = it.created_at ? new Date(it.created_at * 1000).toLocaleString("zh-CN") : "";
-    say(`${it.conversation_id}  ${DIM}${when}${RESET}  ${it.title || "(无标题)"}`);
+    say(`${it.conversation_id}  ${dim}${when}  ${it.title || "(无标题)"}`);
   }
   return 0;
 }
@@ -513,10 +432,10 @@ async function cmdShow(args) {
     images: imagesOf(item).map((i) => i.url),
   }));
   if (args.flags.json) return json({ conversationId: convId, title: data?.title, items }), 0;
-  say(`${CYAN}${data?.title || "(无标题)"}${RESET}  ${convId}`);
+  say(`${cyan}${data?.title || "(无标题)"}  ${convId}`);
   for (const it of items) {
     say(`- ${it.taskId}  model=${it.model} state=${it.state}`);
-    say(`  ${DIM}${(it.prompt || "").slice(0, 100).replace(/\n/g, " ")}${RESET}`);
+    say(`  ${dim}${(it.prompt || "").slice(0, 100).replace(/\n/g, " ")}`);
     for (const u of it.images) say(`  ${u}`);
   }
   return 0;
@@ -568,7 +487,7 @@ function cmdLogout() {
 function help() {
   say(`pwish — 佐糖 AI 设计师命令行工具（picwish.cn/ai-design-create）
 
-${CYAN}登录${RESET}
+${cyan}登录
   pwish login                    浏览器授权（推荐，本地回环 + PKCE）
   pwish login --no-browser       不从浏览器读，强制走网页授权
   pwish login --no-open          只打印授权链接，自己在浏览器打开
@@ -578,26 +497,26 @@ ${CYAN}登录${RESET}
   pwish quota                    查看免费额度
   pwish logout
 
-${CYAN}一句话出图（AI 设计师对话式生图）${RESET}
+${cyan}一句话出图（AI 设计师对话式生图）
   pwish gen "<提示词>" [-i 参考图 ...] [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 输出目录]
   例：pwish gen "白底商品图，柔和影棚光" -i ./mug.jpg -m gemini-3 -r 1:1 -s 2K
 
-${CYAN}电商套图（商品图 → 多场景成套图）${RESET}
+${cyan}电商套图（商品图 → 多场景成套图）
   pwish suite -i ./product.jpg [--selling "产品名+卖点"] [--site amazon] [--scenes main,core,selling,material,person]
   可选：-m 模型 --size 2K --ratio 1:1 -o 输出目录
 
-${CYAN}查询与下载${RESET}
+${cyan}查询与下载
   pwish task <task_id> [...]    查询任务状态
   pwish history [--limit 20]    历史会话
   pwish show <conversation_id>  会话详情
   pwish download <id> [-o dir]  重新下载图片
   pwish queue                   查看任务队列
 
-${CYAN}其他${RESET}
+${cyan}其他
   pwish models                  列出模型/比例/清晰度
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
 
-${DIM}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。${RESET}
+${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。
 `);
   return 0;
 }

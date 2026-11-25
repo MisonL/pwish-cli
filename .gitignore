@@ -3,3 +3,7 @@ out/
 .research/
 *.log
 .DS_Store
+
+# 本地凭证与产物
+*.local.json
+.pwish/

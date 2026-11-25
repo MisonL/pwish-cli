@@ -1,7 +1,7 @@
 {
   "name": "pwish-cli",
-  "version": "0.1.0",
-  "description": "佐糖 AI 设计师（picwish.cn/ai-design-create）命令行工具：一句话出电商图、商品图成套出图，自动下载结果",
+  "version": "0.2.0",
+  "description": "佐糖 AI 设计师（picwish.cn）命令行工具：一句话出电商图、商品图成套出图，自动下载结果",
   "type": "module",
   "bin": {
     "pwish": "bin/pwish.js"
@@ -12,12 +12,29 @@
   "files": [
     "bin",
     "src",
+    "scripts",
     "skill",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "test:watch": "node --test --watch \"test/*.test.js\"",
+    "check": "node scripts/check.js",
+    "verify": "npm run check && npm test",
+    "prepublishOnly": "npm run verify"
   },
   "license": "MIT",
-  "private": true
+  "private": true,
+  "keywords": [
+    "cli",
+    "picwish",
+    "ecommerce",
+    "image-generation",
+    "ai-designer",
+    "电商图",
+    "佐糖"
+  ],
+  "author": "pwish-cli contributors"
 }
