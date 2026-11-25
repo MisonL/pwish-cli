@@ -1,27 +1,55 @@
 # pwish
 
-把 [佐糖 AI 设计师](https://picwish.cn/ai-design-create)（picwish AI Designer）封装成命令行工具，
-并把用法写成一个 agent skill。一句话出电商图、商品图成套出图，结果自动下载到本地。
+**佐糖 AI 设计师的官方账号登录 + 命令行出图工具。** 一句话出电商图、商品图成套出图，结果自动下载到本地。
 
-> 非官方工具：调用的是网页版同源接口，额度/水印/合规规则由佐糖账号决定。
+<p>
+  <a href="https://www.npmjs.com/package/pwish-cli"><img alt="npm" src="https://img.shields.io/npm/v/pwish-cli?color=5555FF"></a>
+  <a href="https://www.npmjs.com/package/pwish-cli"><img alt="downloads" src="https://img.shields.io/npm/dm/pwish-cli"></a>
+  <a href="https://github.com/pwish-cli/pwish-cli/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/pwish-cli/pwish-cli/ci.yml?branch=main"></a>
+  <img alt="node" src="https://img.shields.io/node/v/pwish-cli">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
+
+```bash
+npm i -g pwish-cli
+pwish login                                   # 本机登录页，微信扫码或账号密码
+pwish gen "白底商品图，柔和影棚光" -i ./mug.jpg   # 出图并自动下载
+pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
+```
+
+> 非官方工具：账户额度的消耗、图片水印与内容合规规则由佐糖账号与站点政策决定。
+
+## 目录
+
+- [安装](#安装) · [登录](#登录) · [命令](#命令) · [例子](#例子)
+- [模型](#模型) · [接口说明](#接口说明随站点更新可能变化) · [Skill](#skill)
+- [开发与测试](#开发与测试) · [已知限制](#已知限制)
+
+## 特性
+
+| | |
+|---|---|
+| **本机登录页** | 微信扫码 / 手机号邮箱密码，视觉与官网一致，凭据不落盘 |
+| **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
+| **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
+| **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
+| **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
 ## 安装
 
 ```bash
-cd /path/to/pwish-cli      # 本仓库所在目录
-npm link                   # 全局注册 pwish 命令（或把 bin/pwish.js 加进 PATH）
-pwish help
+npm i -g pwish-cli     # 从 npm 安装
+# 或在仓库内：npm link
 ```
 
-需要 Node.js ≥ 20（用到内置 `fetch`）。**零第三方依赖**——包括读取浏览器 localStorage 的
-LevelDB/Snappy 解析，全部是内置实现。
+需要 Node.js ≥ 20（使用内置 `fetch`）。**无第三方运行时依赖。**
 
 ## 开发与测试
 
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，44 个用例
+npm test         # node --test，46 个用例
 npm run test:watch
 ```
 
@@ -36,7 +64,9 @@ OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--
 | `src/tasks.js` | 建会话 / 建任务 / 批量轮询 / 下载 / 历史 / 队列 |
 | `src/suite.js` | 电商套图两步流程（AI 写提示词 → 批量出图） |
 | `src/models.js` | **模型表、比例尺寸表、场景表、payload 构造（改版时的主要改点）** |
-| `src/oauth.js` | 自建 OAuth2 授权码 + PKCE 回环服务 |
+| `src/auth-server.js` | 本机授权服务：登录页 + OAuth 授权码 + PKCE |
+| `src/passport.js` | 官方账号登录接口客户端（扫码 / 密码） |
+| `src/login-page.js` | 自建登录页与结果页（对齐官网视觉） |
 | `src/browser-token.js` | 只读解析 Chromium localStorage（LevelDB + Snappy） |
 | `src/args.js` / `src/output.js` | 参数解析 / 输出与着色（stdout/stderr 分离） |
 | `src/cli.js` | 命令路由与业务编排 |
@@ -51,45 +81,40 @@ OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--
 pwish login
 ```
 
-按优先级自动选路径，**大多数情况是零交互的**：
+命令会在本机 `127.0.0.1` 启动一个**自建登录页**并自动打开浏览器：
 
-### 1. 直接读已登录浏览器（默认，零交互）
+- **微信扫码**：页面直接展示官方生成的二维码，手机上确认即可；
+- **密码登录**：手机号或邮箱 + 密码。
 
-只要你在 Chrome / Edge / Brave / Chromium / Arc / Vivaldi / Ego Lite 里登录过佐糖，
-`pwish login` 会直接读浏览器的 localStorage 拿到 `passport_api_token` 并校验入库。
+登录凭据只交给本机服务，由它调用官方账号接口换取登录态，密码不保存、不外传。
+拿到登录态后页面提示「授权完成」，终端自动继续。
 
-原理：Chromium 把 localStorage 存在 `<profile>/Local Storage/leveldb`。工具只读地解析
-SSTable / WAL（含内置的 Snappy 解压），提取 `https://picwish.cn` 下的 token。
-**只读、不写入、不外传**，读的是你本机已登录状态。
+### 为什么是本机页面
 
-```bash
-pwish login --no-browser      # 跳过浏览器读取，强制走网页授权
-```
+网页端的登录态只能由官方接口签发。为了让 CLI 也能正当地登录，本机起了一个临时授权服务，
+页面视觉与佐糖官网登录页一致（品牌紫蓝渐变、白卡片、相同输入框规格），
+底层复用官方登录接口，不接触任何第三方：
 
-### 2. 网页 OAuth 兜底（浏览器读不到时）
+1. `pwish login` 起服务，生成 `state` 与 PKCE(S256) 参数，打开授权页；
+2. 用户在页面上登录 → 本机服务调用官方接口换取 `api_token`；
+3. 服务签发一次性授权码（60 秒、单次使用），页面跳回 `/callback`；
+4. CLI 校验 `state` 与 PKCE 后收下 token，写入配置。
 
-读不到（未登录过 / 不支持的浏览器 / 只读环境）时，自动回退到自建的
-**OAuth 2.0 授权码 + PKCE（S256）** 流程：
-
-1. 终端在 `127.0.0.1` 起一个临时授权服务（随机端口，仅监听本机）并打开浏览器；
-2. 授权页按提示登录佐糖 → 把「获取 pwish 授权」拖到书签栏 → 回佐糖页面点一下；
-3. 授权服务签发一次性授权码（60 秒、PKCE 绑定），CLI 用 code + verifier 换 token 落盘。
-
-### 3. 手工入口（CI / 无浏览器）
+### 其他入口
 
 | 命令 | 场景 |
 |---|---|
-| `pwish login --token 'v2,...'` | 直接给 token，完全免交互 |
-| `pwish login --paste` | 从剪贴板读 token |
-| `pwish login --no-open` | 不自动开浏览器，只打印授权链接 |
+| `pwish login --no-open` | 不自动开浏览器，只打印授权链接（远程/SSH） |
 | `pwish login --port 8765` | 指定回环端口（默认随机） |
+| `pwish login --token 'v2,...'` | CI / 无浏览器环境直接给 token |
+| `pwish login --paste` | 从剪贴板读 token |
 | `pwish whoami` / `pwish quota` / `pwish logout` | 账号 / 额度 / 退出 |
 
 安全设计：
-- 浏览器读取路径只做只读解析，不修改浏览器数据；
-- 回环服务只 `listen` 在 `127.0.0.1`，校验 `Host` 头防 DNS rebinding；
+- 只 `listen` 在 `127.0.0.1`，校验 `Host` 头，防 DNS rebinding；
 - `state` 防 CSRF 且一次性；PKCE S256 把授权码绑死在本客户端；
-- 授权码一次性、60 秒过期；token 只在 POST body 里传，不进 URL、不进日志；
+- 授权码一次性、60 秒过期；token 只经 POST body 与内存传递，不进 URL、不进日志；
+- 密码只在一次请求中透传给官方接口，不落盘；
 - 凭证存 `~/.config/pwish/config.json`，权限 `0600`。
 
 环境变量：
@@ -99,6 +124,7 @@ pwish login --no-browser      # 跳过浏览器读取，强制走网页授权
 | `PWISH_TOKEN` | 临时覆盖 token |
 | `PWISH_OUT` | 默认输出目录 |
 | `PWISH_API_BASE` | 覆盖接口域名（默认 `https://aw.aoscdn.com/app/picwish`） |
+| `PWISH_PASSPORT_BASE` | 覆盖账号登录接口域名 |
 | `PWISH_CONFIG_DIR` | 覆盖配置目录 |
 | `PWISH_DEBUG` | 出错时打印原始响应/堆栈 |
 
@@ -158,9 +184,9 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 ### 场景（`--scenes`）
 
 电商套图支持 5 个场景，均已实测：`main`(白底主图) `core`(核心卖点图) `selling`(卖点图) `material`(材质图) `person`(模特展示图)。
-站点 UI 还有「场景展示图」「多场景拼图」两个选项，其接口枚举值尚未逆向确认，CLI 暂不支持。
+站点 UI 还有「场景展示图」「多场景拼图」两个选项，其接口参数尚未确认，CLI 暂不支持。
 
-## 接口（逆向所得，可能随站点更新变化）
+## 接口说明（随站点更新可能变化）
 
 基址 `https://aw.aoscdn.com/app/picwish`，`Authorization: Bearer <passport_api_token>`，
 所有请求带 `product_id=482&language=zh`。
@@ -192,11 +218,11 @@ cp -R skill/pwish ~/.agents/skills/pwish
 
 **能力边界**（没做 / 没验证，不要当成能用）：
 
-- **详情图（电商详情图）未实现**：站点有该功能，但其接口走的是独立前端 chunk，尚未逆向，无对应命令。
+- **详情图（电商详情图）未实现**：站点有该功能，CLI 尚未支持，无对应命令。
 - **视频生成未实现**：接口存在（`tasks/login/video-messages`），未验证也未封装。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
 - **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
-- **浏览器直读仅限 Chromium 系**：Chrome / Edge / Brave / Chromium / Arc / Vivaldi / Ego Lite 可用；
+- **浏览器直读仅限 Chromium 系**：Chrome / Edge / Brave / Chromium / Arc / Vivaldi 可用；
   **Safari 与 Firefox 不支持**，会自动回退到网页 OAuth。
 - **上传单文件上限 20MB**（CLI 侧保护）。实际站点限制未逐一验证。
 

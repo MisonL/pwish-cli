@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { ApiError } from "./api.js";
 
 /** 轮询直到任务完成；返回后端最终 data。 */
 export async function pollTask(client, fetcher, { timeoutMs = 300_000, intervalMs = 3000, onProgress } = {}) {
@@ -130,6 +131,19 @@ export async function getConversation(client, conversationId, { page = 1, perPag
 export async function queueStatus(client) {
   const res = await client.request("image/conversations/task-queue");
   return res.data;
+}
+
+/**
+ * 校验 token 是否真实有效。
+ * 注意：vips/all-free-counts 对无效 token 也会返回 200，不能用来判断登录态，
+ * 因此这里用会返回 401 的会话列表接口做探针。
+ */
+export async function verifyToken(client) {
+  const res = await client.request("image/conversations", { query: { page: 1, per_page: 1 } });
+  if (res?.status && res.status !== 200) {
+    throw new ApiError("token 无效或已过期，请重新登录", { code: "UNAUTHORIZED", payload: res });
+  }
+  return true;
 }
 
 export async function freeCounts(client, cfg) {

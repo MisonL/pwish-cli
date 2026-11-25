@@ -19,25 +19,27 @@ pwish quota    # 看免费额度；额度为 0 时不要盲目提交，先告知
 - `quota` 中目标模型的次数为 0 → 直接告诉用户「该模型免费次数已用完，需要算粒/会员」，不要硬跑。
 - 不要自己猜 API、不要直接用 curl 打接口：CLI 已经封装了上传、轮询、下载与错误码。
 
-## 1. 登录（通常零交互）
+## 1. 登录
 
 ```bash
 pwish login
 ```
 
-按优先级自动选路径：
-1. **读已登录浏览器**（默认）：从本机 Chrome/Edge/Brave/Chromium/Arc/Vivaldi/Ego Lite 的 localStorage
-   只读提取佐糖 token。用户只要在浏览器登录过佐糖，就什么都不用做。
-   （Safari / Firefox 不支持，会自动落到第 2 步。）
-2. **网页 OAuth 兜底**：读不到时在本地回环起服务走 OAuth 授权码 + PKCE（只监听 127.0.0.1），
-   浏览器里拖一个授权书签、在佐糖页面点一下即可。
-3. **手工**：`pwish login --token 'v2,...'`、`--paste`（CI/无浏览器环境）。
-   取 token：浏览器登录 <https://picwish.cn/ai-design-create> → Console →
-   `copy(localStorage.getItem('passport_api_token'))`。
+在本机 `127.0.0.1` 起一个自建登录页并打开浏览器，用户在页面上：
+- **微信扫码** 直接登录，或
+- 输入 **手机号 / 邮箱 + 密码** 登录。
 
-`pwish login --no-browser` 可强制跳过浏览器读取、走网页授权。
+拿到登录态后页面显示「授权完成」，终端自动继续，无需复制任何 token。
+
+| 场景 | 命令 |
+|---|---|
+| 远程 / SSH（不自动开浏览器） | `pwish login --no-open` 后手动打开打印出的链接 |
+| 指定端口 | `pwish login --port 8765` |
+| CI / 无浏览器 | `pwish login --token 'v2,...'` |
+| 剪贴板 | `pwish login --paste` |
 
 登录态存 `~/.config/pwish/config.json`（0600）。**不要**把 token 写进仓库、日志或最终回答。
+需要让用户自己登录时，提示他直接跑 `pwish login`，不要索要账号密码。
 
 ## 2. 一句话出图：`pwish gen`
 
@@ -86,7 +88,7 @@ pwish suite -i ./product.jpg \
 **每多一个 scene 就多一次模型调用**，注意额度：先用 1-2 个场景试，确认风格后再跑全套。
 
 **没有的能力**（用户要时直接说明做不到，别尝试用现有命令硬凑）：电商详情图、电商视频、
-套图的「场景展示图 / 多场景拼图」两个场景。站点上有这些功能，但 CLI 尚未逆向/封装。
+套图的「场景展示图 / 多场景拼图」两个场景。站点上有这些功能，CLI 尚未支持。
 
 ## 4. 结果查询与重下
 
