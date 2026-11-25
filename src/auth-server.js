@@ -1,0 +1,299 @@
+import http from "node:http";
+import crypto from "node:crypto";
+import { execFile } from "node:child_process";
+import { renderLoginPage, renderDonePage, renderErrorPage } from "./login-page.js";
+import { loginWithPassword, requestWechatQr, pollWechatQr, LoginError } from "./passport.js";
+
+/**
+ * 本机授权服务：既提供自建登录页，也承担 OAuth 2.0 授权端点的职责。
+ *
+ * 流程（RFC 6749 授权码 + RFC 7636 PKCE + RFC 8252 loopback）：
+ *   1. CLI 起服务，生成 state 与 PKCE 对，打开 /authorize
+ *   2. 用户在页面上用佐糖账号登录（微信扫码 / 手机号或邮箱 + 密码）
+ *   3. 页面把凭据交给本机服务 → 服务向官方接口换取 api_token
+ *   4. 服务签发一次性授权码，浏览器跳到 /callback?code&state
+ *   5. CLI 校验 state 与 PKCE 后收下 token
+ *
+ * 安全约束：只监听 127.0.0.1、校验 Host 防 DNS rebinding、state 一次性、
+ * 授权码 60 秒且单次使用、token 只经 POST body 与内存传递，不写日志。
+ */
+
+export const CODE_TTL_MS = 60_000;
+export const TOKEN_PATTERN = /^v2,\d+,\d+,[0-9a-fA-F]{16,}$/;
+
+export function base64url(buf) {
+  return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function createPkce() {
+  const verifier = base64url(crypto.randomBytes(32));
+  const challenge = base64url(crypto.createHash("sha256").update(verifier).digest());
+  return { verifier, challenge, method: "S256" };
+}
+
+export function verifyChallenge(verifier, challenge) {
+  if (!verifier || !challenge) return false;
+  const computed = base64url(crypto.createHash("sha256").update(verifier).digest());
+  const a = Buffer.from(computed);
+  const b = Buffer.from(challenge);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export function newState() {
+  return base64url(crypto.randomBytes(16));
+}
+
+export function isValidToken(token) {
+  return typeof token === "string" && TOKEN_PATTERN.test(token.trim());
+}
+
+export function openBrowser(url) {
+  const platform = process.platform;
+  const [cmd, args] =
+    platform === "darwin"
+      ? ["open", [url]]
+      : platform === "win32"
+        ? ["cmd", ["/c", "start", "", url.replace(/&/g, "^&")]]
+        : ["xdg-open", [url]];
+  return new Promise((resolve) => execFile(cmd, args, (err) => resolve(!err)));
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]);
+}
+
+function readJsonBody(req, limit = 8192) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(new Error("BODY_TOO_LARGE"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (!raw) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error("BAD_JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+/**
+ * 启动本机授权服务。
+ * @returns {Promise<{port:number, origin:string, authorizeUrl:string, state:string,
+ *   waitForToken:()=>Promise<{token:string}>, close:()=>Promise<void>}>}
+ */
+export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0.1", autoRefreshQr = true } = {}) {
+  const pkce = createPkce();
+  const state = newState();
+  const codes = new Map(); // code -> { token, challenge, expiresAt }
+  let qrCache = null; // { hashKey, qrUrl, at }
+  let settled = false;
+
+  let resolveToken;
+  let rejectToken;
+  const tokenPromise = new Promise((res, rej) => {
+    resolveToken = res;
+    rejectToken = rej;
+  });
+  tokenPromise.catch(() => {});
+
+  const settle = (fn, value) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    fn(value);
+  };
+
+  const issueCode = (token) => {
+    const code = base64url(crypto.randomBytes(32));
+    codes.set(code, { token, challenge: pkce.challenge, expiresAt: Date.now() + CODE_TTL_MS });
+    return code;
+  };
+
+  const redeemCode = (code) => {
+    const entry = codes.get(code);
+    if (!entry) return { error: "无效的授权码" };
+    codes.delete(code);
+    if (Date.now() > entry.expiresAt) return { error: "授权码已过期" };
+    if (!verifyChallenge(pkce.verifier, entry.challenge)) return { error: "PKCE 校验失败" };
+    return { token: entry.token };
+  };
+
+  let origin = "";
+
+  const server = http.createServer(async (req, res) => {
+    const actualPort = server.address()?.port ?? port;
+    const url = new URL(req.url, `http://${req.headers.host || host}`);
+
+    const hostHeader = String(req.headers.host || "");
+    if (!new RegExp(`^(${host}|localhost):${actualPort}$`).test(hostHeader)) {
+      res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("forbidden host");
+      return;
+    }
+
+    const sendHtml = (code, body) => {
+      res.writeHead(code, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(body);
+    };
+    const sendJson = (code, obj) => {
+      res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(obj));
+    };
+
+    try {
+      // 授权端点：登录页
+      if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/authorize")) {
+        if (url.searchParams.get("state") !== state) {
+          sendHtml(400, renderErrorPage("state 不匹配，请重新执行 pwish login"));
+          return;
+        }
+        sendHtml(200, renderLoginPage({ origin, state }));
+        return;
+      }
+
+      // 微信二维码
+      if (req.method === "POST" && url.pathname === "/api/qrcode") {
+        if (qrCache && autoRefreshQr && Date.now() - qrCache.at < 120_000) {
+          sendJson(200, { hashKey: qrCache.hashKey, qrUrl: qrCache.qrUrl });
+          return;
+        }
+        const qr = await requestWechatQr();
+        qrCache = { ...qr, at: Date.now() };
+        sendJson(200, qr);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/qrcode/poll") {
+        const body = await readJsonBody(req);
+        if (!body.hashKey) {
+          sendJson(400, { message: "缺少 hashKey" });
+          return;
+        }
+        try {
+          const result = await pollWechatQr(String(body.hashKey));
+          if (result.status === "waiting") sendJson(200, { status: "waiting" });
+          else sendJson(200, { status: "ok", token: result.token });
+        } catch (err) {
+          if (err instanceof LoginError) {
+            qrCache = null; // 失效后允许重新获取
+            sendJson(200, { status: "error", message: err.message });
+          } else throw err;
+        }
+        return;
+      }
+
+      // 密码登录
+      if (req.method === "POST" && url.pathname === "/api/login/password") {
+        const body = await readJsonBody(req);
+        try {
+          const result = await loginWithPassword({ account: String(body.account || "").trim(), password: String(body.password || "") });
+          sendJson(200, { token: result.token });
+        } catch (err) {
+          if (err instanceof LoginError) sendJson(200, { message: err.message });
+          else throw err;
+        }
+        return;
+      }
+
+      // 页面回传 token → 签发授权码
+      if (req.method === "POST" && url.pathname === "/session") {
+        const body = await readJsonBody(req);
+        if (body.state !== state) {
+          sendJson(400, { message: "state 不匹配" });
+          return;
+        }
+        const token = String(body.token || "").trim();
+        if (!isValidToken(token)) {
+          sendJson(400, { message: "登录态格式不正确" });
+          return;
+        }
+        const code = issueCode(token);
+        sendJson(200, {
+          redirect: `${origin}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+        });
+        return;
+      }
+
+      // 重定向端点：兑换授权码
+      if (req.method === "GET" && url.pathname === "/callback") {
+        if (url.searchParams.get("state") !== state) {
+          sendHtml(400, renderErrorPage("state 不匹配"));
+          return;
+        }
+        const result = redeemCode(url.searchParams.get("code") || "");
+        if (result.error) {
+          sendHtml(400, renderErrorPage(result.error));
+          return;
+        }
+        sendHtml(200, renderDonePage());
+        settle(resolveToken, { token: result.token });
+        return;
+      }
+
+      // 健康检查（供测试与调试）
+      if (req.method === "GET" && url.pathname === "/health") {
+        sendJson(200, { ok: true, state });
+        return;
+      }
+
+      sendHtml(404, renderErrorPage("未知路径"));
+    } catch (err) {
+      sendHtml(500, renderErrorPage(`服务异常：${escapeHtml(err.message)}`));
+    }
+  });
+
+  const timer = setTimeout(() => settle(rejectToken, new Error("登录超时，未完成授权")), timeoutMs);
+
+  const shutdown = () =>
+    new Promise((resolve) => {
+      clearTimeout(timer);
+      try {
+        server.closeIdleConnections?.();
+        server.closeAllConnections?.();
+      } catch {
+        /* 老版本 Node 无这两个方法 */
+      }
+      server.close(() => resolve());
+    });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    server.listen(port, host, () => {
+      const actual = server.address().port;
+      origin = `http://${host}:${actual}`;
+      const authorizeUrl =
+        `${origin}/authorize?response_type=code&client_id=pwish-cli` +
+        `&state=${encodeURIComponent(state)}` +
+        `&code_challenge=${encodeURIComponent(pkce.challenge)}&code_challenge_method=S256`;
+      resolve({
+        port: actual,
+        origin,
+        authorizeUrl,
+        state,
+        async waitForToken() {
+          try {
+            return await tokenPromise;
+          } finally {
+            await shutdown();
+          }
+        },
+        close: shutdown,
+      });
+    });
+  });
+}

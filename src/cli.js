@@ -4,7 +4,7 @@ import { parseArgs, readStdin } from "./args.js";
 import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
-import { startLoopbackAuth, openBrowser } from "./oauth.js";
+import { startAuthServer, openBrowser } from "./auth-server.js";
 import { findPassportToken } from "./browser-token.js";
 import { execFileSync } from "node:child_process";
 import { MODELS, RATIOS, SUITE_SCENES, SUITE_SITES, resolveModel, buildImageMessagePayload } from "./models.js";
@@ -20,6 +20,7 @@ import {
   getConversation,
   queueStatus,
   freeCounts,
+  verifyToken,
 } from "./tasks.js";
 import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
 
@@ -28,6 +29,7 @@ import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
 async function persistToken(token, { json: asJson = false } = {}) {
   token = loginWithToken(token);
   const client = createClient({ token });
+  await verifyToken(client);
   const data = await freeCounts(client);
   const userId = userIdOfToken(token);
   saveConfig({ token });
@@ -56,27 +58,26 @@ async function tokenFromBrowser(args) {
 }
 
 async function oauthLogin(args) {
-  const timeoutMs = Number(args.flags.timeout || 300) * 1000;
-  const auth = await startLoopbackAuth({ timeoutMs, port: Number(args.flags.port || 0) });
-  log(`${cyan}已开启本地授权服务 http://127.0.0.1:${auth.port}`);
-  log(`${dim}OAuth 2.0 授权码 + PKCE(S256) · 仅监听 127.0.0.1 · 等待上限 ${Math.round(timeoutMs / 60000)} 分钟`);
+  const timeoutMs = Number(args.flags.timeout || 600) * 1000;
+  const auth = await startAuthServer({ timeoutMs, port: Number(args.flags.port || 0) });
+  log(`${cyan}已启动本机授权服务${reset} http://127.0.0.1:${auth.port}`);
+  log(`${dim}OAuth 2.0 授权码 + PKCE(S256) · 仅监听 127.0.0.1 · 等待上限 ${Math.round(timeoutMs / 60000)} 分钟${reset}`);
   log("");
 
   const opened = args.flags["no-open"] ? false : await openBrowser(auth.authorizeUrl);
   if (opened) {
-    log("已在浏览器打开授权页。按页面提示：登录佐糖 → 把「获取 pwish 授权」拖到书签栏 → 回佐糖页面点一下书签。");
+    log("已在浏览器打开登录页，请用佐糖账号登录（微信扫码 或 手机号/邮箱 + 密码）。");
   } else {
     log("无法自动打开浏览器，请手动访问：");
     log(`  ${auth.authorizeUrl}`);
   }
-  log(`${dim}不方便用书签？授权页里也提供粘贴 token 的方式。`);
 
   try {
     const { token } = await auth.waitForToken();
     return await persistToken(token, { json: args.flags.json });
   } catch (err) {
     await auth.close();
-    throw new UserError(`网页授权未完成：${err.message}。也可以直接 pwish login --token 'v2,...'`, "OAUTH_FAILED");
+    throw new UserError(`登录未完成：${err.message}`, "OAUTH_FAILED");
   }
 }
 
@@ -102,8 +103,23 @@ async function cmdLogin(args) {
 }
 
 function execPaste() {
-  // 只在 --paste 时用；延迟 require 保持顶层无副作用
-  return execFileSync("pbpaste", { encoding: "utf8" }).trim();
+  // 只在 --paste 时用；各平台剪贴板读取命令
+  const platform = process.platform;
+  if (platform === "darwin") return execFileSync("pbpaste", { encoding: "utf8" }).trim();
+  if (platform === "win32") return execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" }).trim();
+  const candidates = [
+    ["xclip", ["-selection", "clipboard"]],
+    ["xsel", ["--clipboard", "--output"]],
+    ["wl-paste", []],
+  ];
+  for (const [cmd, args] of candidates) {
+    try {
+      return execFileSync(cmd, args, { encoding: "utf8" }).trim();
+    } catch {
+      /* try next */
+    }
+  }
+  throw new Error("未找到剪贴板工具（需要 xclip / xsel / wl-paste）");
 }
 
 function clientFromConfig(flags = {}) {
