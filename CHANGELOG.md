@@ -5,9 +5,11 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-25
+
 ### Fixed
 
-- `npm test` 改用 `node --test` 自动发现测试，兼容 Node 20 与 CI 环境
+- `npm test` 改用 `node --test` 自动发现测试，兼容 Node 20 与 CI（CI 现已全绿）
 
 ## [0.1.2] - 2026-11-25
 
