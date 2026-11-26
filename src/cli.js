@@ -36,6 +36,7 @@ import {
   verifyToken,
 } from "./tasks.js";
 import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
+import { summarizeQuota, preflight, hasCredits, toolRemainOf, modelRemain } from "./quota.js";
 
 /* -------------------------------- commands -------------------------------- */
 
@@ -129,47 +130,159 @@ function clientFromConfig(flags = {}) {
   return createClient(cfg);
 }
 
+function describeMembership(quota) {
+  const { membership, credits } = quota;
+  if (!membership.isVip) {
+    const credit = credits.free + credits.allFree;
+    return credit > 0 ? `免费账号 · 算粒 ${credit}` : "免费账号 · 无算粒";
+  }
+  const parts = ["会员"];
+  if (membership.licenseType && membership.licenseType !== "vip") parts.push(membership.licenseType);
+  if (membership.expiredAt) {
+    parts.push(`到期 ${new Date(membership.expiredAt * 1000).toLocaleDateString("zh-CN")}`);
+  }
+  if (credits.vipGeminiRemain) parts.push(`生图额度 ${credits.vipGeminiRemain}`);
+  return parts.join(" · ");
+}
+
 async function cmdWhoami(args) {
   const client = clientFromConfig(args.flags);
-  const data = await freeCounts(client);
+  const quota = summarizeQuota(await freeCounts(client));
   const cached = readCachedUser();
   const out = {
     userId: userIdOfToken(client.token),
-    vip: Boolean(data.vip),
+    vip: quota.membership.isVip,
+    membership: quota.membership,
+    credits: { free: quota.credits.free, allFree: quota.credits.allFree, vipGeminiRemain: quota.credits.vipGeminiRemain },
     apiBase: client.base,
     configPath: CONFIG_PATH,
     cached,
   };
   if (args.flags.json) return json(out), 0;
   say(`用户 ID: ${out.userId ?? "未知"}`);
-  say(`会员: ${out.vip ? "是" : "否（免费额度用户）"}`);
+  say(`身份: ${describeMembership(quota)}`);
   say(`接口: ${out.apiBase}`);
   say(`配置: ${out.configPath}`);
   return 0;
 }
 
+const QUOTA_ROWS = [
+  ["Gemini 3（电商模型 3.0）", "gemini-3"],
+  ["Nano Banana 2（电商模型 2.0）", "nano-banana-pro"],
+  ["Nano Banana 2 Lite", "nano-banana-2-lite"],
+  ["GPT Image 2", "gpt-image-2"],
+  ["Gemini 3.1", "gemini-3.1"],
+  ["即梦 5.0 Flash", "jimeng-5-flash"],
+  ["即梦 4.5", "jimeng-4.5"],
+];
+
+const DESIGN_ROWS = [
+  ["套图", "suite"],
+  ["详情图", "detail"],
+  ["AI 图片编辑", "edit"],
+];
+
+const TOOL_ROWS = [
+  ["抠图", "cutout"],
+  ["变清晰", "upscale"],
+  ["高清修复", "restore"],
+  ["换背景", "bg"],
+  ["去水印", "dewatermark"],
+  ["去杂物", "erase"],
+  ["上色", "colorize"],
+  ["格式转换", "convert"],
+];
+
+/** 中文字符占两列，按显示宽度补齐。 */
+function padDisplay(text, width) {
+  let shown = 0;
+  for (const ch of text) shown += /[\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF]/.test(ch) ? 2 : 1;
+  return text + " ".repeat(Math.max(0, width - shown));
+}
+
+function quotaCell(remain, used) {
+  if (remain === undefined) return `${dim}—${reset}`;
+  const text = String(remain);
+  const colored = remain > 0 ? `${green}${text}${reset}` : `${yellow}${text}${reset}`;
+  return used === undefined ? colored : `${colored}${dim}（今日已用 ${used}）${reset}`;
+}
+
+/** 生成/处理前查一次额度，给出可读的预检结论。 */
+async function checkQuota(client, { kind, key, label, force }) {
+  let quota;
+  try {
+    quota = summarizeQuota(await freeCounts(client));
+  } catch {
+    return null; // 额度接口偶发失败不应阻断主流程
+  }
+  const result = preflight(quota, { kind, modelKey: key });
+  if (result.level === "block" && !force) {
+    throw new UserError(`${label}${result.message}`, "QUOTA_EXCEEDED");
+  }
+  if (result.level === "block") log(`${yellow}! ${label}${result.message}（--force 已跳过预检）${reset}`);
+  return quota;
+}
+
+/** 任务结束后回读额度，给一行「还剩多少」的反馈。 */
+async function quotaAfterRun(client, { kind, key, label }) {
+  try {
+    const quota = summarizeQuota(await freeCounts(client));
+    const remain =
+      kind === "tool" ? toolRemainOf(quota, key) : kind === "model" ? modelRemain(quota, key) : quota.designer[key];
+    if (remain === undefined) return null;
+    log(`${dim}额度：${label} 免费剩余 ${remain} 次${reset}`);
+    return { remain };
+  } catch {
+    return null;
+  }
+}
+
 async function cmdQuota(args) {
   const client = clientFromConfig(args.flags);
-  const data = await freeCounts(client);
-  const groups = [
-    ["Nano Banana 2（电商模型 2.0）", data.llm_chat_num_banana21],
-    ["Gemini 3（电商模型 3.0）", data.llm_chat_num_gm30 ?? data.llm_chat_num_gem30],
-    ["GPT Image 2", data.llm_chat_num_gpt2],
-    ["Gemini 3.1", data.llm_chat_num_gem31],
-    ["Nano Banana 2 Lite", data.llm_chat_num_gem31lite],
-    ["即梦 5.0 Flash", data.llm_chat_num_jm50fla],
-    ["套图任务", data.llm_chat_suite],
-    ["详情图任务", data.llm_chat_detail],
-    ["AI 图片编辑", data.image_edit_free_num],
-    ["文生图", data.text_to_image_free_num],
-  ].filter(([, v]) => v !== undefined);
+  const quota = summarizeQuota(await freeCounts(client));
 
-  if (args.flags.json) return json({ vip: Boolean(data.vip), userId: userIdOfToken(client.token), groups: Object.fromEntries(groups) }), 0;
-  say(`${cyan}免费额度（0 表示该模型免费次数已用完，需要算粒/会员）`);
-  for (const [label, value] of groups) {
-    say(`  ${String(label).padEnd(28)} ${value > 0 ? green + value + reset : dim + value + reset}`);
+  if (args.flags.json) {
+    return (
+      json({
+        userId: userIdOfToken(client.token),
+        membership: quota.membership,
+        credits: quota.credits,
+        models: quota.models,
+        designer: quota.designer,
+        tools: Object.fromEntries(Object.entries(quota.tools).map(([k, v]) => [k, v.remain ?? null])),
+      }),
+      0
+    );
   }
-  say(`${dim}会员：${data.vip ? "是" : "否"}`);
+
+  say(`${cyan}账号${reset}  ${describeMembership(quota)}`);
+  const credit = quota.credits.free + quota.credits.allFree;
+  if (credit > 0 || quota.credits.vipGeminiRemain > 0) {
+    say(`${dim}     算粒 ${credit} · 会员生图额度 ${quota.credits.vipGeminiRemain}${reset}`);
+  }
+
+  say(`\n${cyan}生图模型（免费次数）`);
+  for (const [label, key] of QUOTA_ROWS) {
+    if (quota.models[key] === undefined) continue;
+    say(`  ${padDisplay(label, 28)} ${quotaCell(quota.models[key])}`);
+  }
+
+  say(`\n${cyan}设计任务（免费次数）`);
+  for (const [label, key] of DESIGN_ROWS) {
+    if (quota.designer[key] === undefined) continue;
+    say(`  ${padDisplay(label, 28)} ${quotaCell(quota.designer[key])}`);
+  }
+
+  say(`\n${cyan}图片工具（今日剩余次数）`);
+  for (const [label, key] of TOOL_ROWS) {
+    const { remain, used } = quota.tools[key] || {};
+    say(`  ${padDisplay(label, 28)} ${quotaCell(remain, used)}`);
+  }
+
+  if (!hasCredits(quota) && !quota.membership.isVip) {
+    say(`\n${dim}提示：0 表示今日免费次数已用完（次日重置）。会员用户的算粒/额度不在此表，`);
+    say(`      需要时用 pwish quota --json 取原始字段，或直接在站点升级。${reset}`);
+  }
   return 0;
 }
 
@@ -266,6 +379,13 @@ async function cmdTool(name, args) {
 
   const client = clientFromConfig(args.flags);
 
+  await checkQuota(client, {
+    kind: "tool",
+    key: name,
+    label: `${tool.label}：`,
+    force: Boolean(args.flags.force),
+  });
+
   log(`${dim}${tool.label}：${path.basename(image)}`);
   const { taskId, data } = await tool.run(client, opts);
   const urls = resultUrls(data);
@@ -290,6 +410,7 @@ async function cmdTool(name, args) {
   say(`${green}✓ ${tool.label}完成${taskId ? `  任务: ${taskId}` : ""}`);
   for (const d of saved) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   if (args.flags["no-download"]) for (const u of urls) say(`  ${u}`);
+  await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
   return 0;
 }
 
@@ -312,6 +433,13 @@ async function cmdGen(args) {
 
   if (!["economy", "stable"].includes(pattern)) throw new UserError("--mode 只能是 economy 或 stable");
   if (!RATIOS.includes(ratio)) throw new UserError(`--ratio 不支持 ${ratio}，可用：${RATIOS.join(", ")}`);
+
+  await checkQuota(client, {
+    kind: "model",
+    key: model.key,
+    label: `模型 ${model.key}：`,
+    force: Boolean(args.flags.force),
+  });
 
   let conversations = args.flags.conv || args.flags.conversation || null;
 
@@ -392,6 +520,7 @@ async function cmdGen(args) {
 
   say(`${green}✓ 完成 ${okCount}/${results.length} 张  会话: ${conversations}`);
   for (const d of downloaded) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
+  await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key });
   for (const r of results.filter((x) => !x.ok)) say(`  ${yellow}! ${r.taskId} 失败: ${r.error || "无图片返回"}`);
   if (args.flags["no-download"]) {
     for (const r of results) for (const img of r.images) say(`  ${img.url}`);
@@ -419,6 +548,13 @@ async function cmdSuite(args) {
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
+
+  await checkQuota(client, {
+    kind: "design",
+    key: "suite",
+    label: "套图：",
+    force: Boolean(args.flags.force),
+  });
 
   log(`${dim}上传 ${images.length} 张商品图…`);
   const uploaded = await uploadFiles(client, images);
@@ -497,6 +633,7 @@ async function cmdSuite(args) {
 
   say(`${green}✓ 套图完成 ${total} 张  会话: ${out.conversationId}`);
   for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
+  await quotaAfterRun(client, { kind: "design", key: "suite", label: "套图" });
   return 0;
 }
 
@@ -617,8 +754,8 @@ ${cyan}登录
   pwish login --no-open          不自动开浏览器，手动访问打印的链接
   pwish login --token 'v2,...'   CI/无浏览器环境直接给 token
   pwish login --paste            从剪贴板读 token
-  pwish whoami                   查看当前账号
-  pwish quota                    查看免费额度
+  pwish whoami                   查看当前账号（会员身份 / 算粒）
+  pwish quota                    额度总览：模型、设计任务、图片工具
   pwish logout
 
 ${cyan}一句话出图（AI 设计师对话式生图）
@@ -650,6 +787,7 @@ ${cyan}其他
   pwish models                  列出模型/比例/清晰度
   pwish skill --install         安装 agent skill
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
+        --force 跳过额度预检（账号还有会员权益但 CLI 判为 0 时用）
 
 ${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。
 `);

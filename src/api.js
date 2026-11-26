@@ -2,14 +2,14 @@ import { UserError, loadConfig, resolveToken } from "./config.js";
 
 /** Error codes returned by the backend, mapped to stable CLI error names. */
 export const API_ERRORS = {
-  15546: ["CREDIT_NOT_ENOUGH", "算粒不足，本次生成需要的算粒不够"],
-  15030: ["DAILY_LIMIT_EXCEEDED", "今日免费额度已用完"],
+  15546: ["CREDIT_NOT_ENOUGH", "算粒不足（用 `pwish quota` 看余额；可换便宜模型或升级会员）"],
+  15030: ["DAILY_LIMIT_EXCEEDED", "今日免费额度已用完（次日重置；可换模型或升级会员）"],
   15022: ["SENSITIVE_IMAGE", "参考图被判定为敏感图片"],
   "-16": ["IMAGE_POLICY_VIOLATION", "提示词或图片触发了图片安全策略"],
   "-30": ["INVALID_WORDS", "提示词包含违禁词"],
   15502: ["INVALID_PARAM", "参数不合法（常见于 scene / size / model 取值错误）"],
   15550: ["TASK_CREATION_FAIL", "任务创建失败（服务端排队或限流）"],
-  15558: ["FREE_PREVIEW_LIMIT_EXCEEDED", "免费预览次数已用完"],
+  15558: ["FREE_PREVIEW_LIMIT_EXCEEDED", "免费预览次数已用完（升级会员后可继续）"],
   15500: ["TASK_NOT_FOUND", "任务不存在"],
   15021: ["TASK_EXPIRED", "任务已过期（超过 1 小时）"],
   401: ["UNAUTHORIZED", "登录态失效，请重新执行 `pwish login`"],

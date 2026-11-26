@@ -11,7 +11,7 @@ const VALUE_FLAGS = new Set([
 /** 纯开关（不需要值）。 */
 const BOOLEAN_FLAGS = new Set([
   "json", "no-download", "paste", "help", "no-plan",
-  "no-open", "version", "v", "skill", "install", "print", "showpath",
+  "no-open", "version", "v", "skill", "install", "print", "showpath", "force",
 ]);
 
 /** 短名 → 长名归一化：让 `-m` 与 `--model` 落到同一个 flag 上。 */

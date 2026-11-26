@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
+### Added
+
+- 会员 / 算粒 / 额度体系化反馈（`src/quota.js`）：
+  - `pwish quota` 重做：账号身份（免费或会员、到期、算粒）+ 生图模型免费次数 +
+    设计任务（套图 / 详情图 / AI 图片编辑）+ 图片工具（含「今日已用」计数），中英混排按显示宽度对齐
+  - `pwish quota --json` 输出会员、算粒、各模块额度结构，便于脚本消费
+  - 生成前预检：`gen` / `suite` / 图片工具在额度为 0 时直接拦下，并列出还有额度的替代模型
+  - 任务结束后回读额度，打印 `额度：xxx 免费剩余 N 次`
+  - `--force` 跳过预检（账号仍有会员权益但被判为 0 时使用）
+- `pwish whoami` 增加会员身份与算粒摘要
+- `test/quota.test.js`：额度归类、会员身份、预检拦截的回归测试
+
+### Changed
+
+- 额度相关错误码改为可执行提示：`CREDIT_NOT_ENOUGH`、`DAILY_LIMIT_EXCEEDED`、
+  `FREE_PREVIEW_LIMIT_EXCEEDED` 都说明下一步该做什么
+- 帮助信息补充 `--force` 与新的 quota / whoami 说明
+
 ## [0.2.1] - 2026-11-26
 
 ### Fixed
