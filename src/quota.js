@@ -8,8 +8,7 @@
 /** 电商模型 → 免费次数字段（第一个有值的生效）。 */
 const MODEL_FIELDS = {
   "gemini-3": ["llm_chat_num_gm30", "llm_chat_num_gem30"],
-  "gemini-3.1": ["llm_chat_num_gem31"],
-  "nano-banana-pro": ["llm_chat_num_banana21"],
+  "nano-banana-pro": ["llm_chat_num_banana21", "llm_chat_num_gem31"],
   "nano-banana-2-lite": ["llm_chat_num_gem31lite"],
   "gpt-image-2": ["llm_chat_num_gpt2"],
   "gpt-image-2-flare": ["llm_chat_num_gpt2"],
@@ -46,12 +45,15 @@ const TOOL_FIELDS = {
   convert: { remain: "document_conversion_num" },
 };
 
-function firstValue(data, fields) {
+/** 多个候选字段取最大值：任一口径还有次数就不该被判成 0。 */
+function maxValue(data, fields) {
+  let best = { field: null, value: undefined };
   for (const field of fields) {
     const value = data[field];
-    if (typeof value === "number") return { field, value };
+    if (typeof value !== "number") continue;
+    if (best.value === undefined || value > best.value) best = { field, value };
   }
-  return { field: null, value: undefined };
+  return best;
 }
 
 function toolRemain(data, spec) {
@@ -67,12 +69,12 @@ export function summarizeQuota(data = {}) {
   const vipQuota = data.local_vip_quota || {};
   const models = {};
   for (const [key, fields] of Object.entries(MODEL_FIELDS)) {
-    const { value } = firstValue(data, fields);
+    const { value } = maxValue(data, fields);
     if (value !== undefined) models[key] = value;
   }
   const designer = {};
   for (const [key, fields] of Object.entries(DESIGN_FIELDS)) {
-    const { value } = firstValue(data, fields);
+    const { value } = maxValue(data, fields);
     if (value !== undefined) designer[key] = value;
   }
   const tools = {};

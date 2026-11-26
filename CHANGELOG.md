@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-26
+
+### Fixed
+
+- 额度表模型口径与 `pwish models` 对齐：`nano-banana-pro` 同时计入 Nano Banana 2 与 Gemini 3.1 两个额度池
+  （多候选字段取最大值，避免有额度却判成 0），并单列「即梦 5.0 Flash」
+
 ## [0.3.0] - 2026-11-26
 
 ### Added

@@ -168,12 +168,12 @@ async function cmdWhoami(args) {
 
 const QUOTA_ROWS = [
   ["Gemini 3（电商模型 3.0）", "gemini-3"],
-  ["Nano Banana 2（电商模型 2.0）", "nano-banana-pro"],
+  ["Nano Banana 2 / Gemini 3.1", "nano-banana-pro"],
   ["Nano Banana 2 Lite", "nano-banana-2-lite"],
   ["GPT Image 2", "gpt-image-2"],
-  ["Gemini 3.1", "gemini-3.1"],
-  ["即梦 5.0 Flash", "jimeng-5-flash"],
   ["即梦 4.5", "jimeng-4.5"],
+  ["即梦 5.0 Flash", "jimeng-5-flash"],
+  ["Seedream 5 系列", "seedream-5-pro"],
 ];
 
 const DESIGN_ROWS = [
