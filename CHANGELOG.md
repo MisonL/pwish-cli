@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
+### Added
+
+- 8 个图片工具命令，均已对线上接口实测跑通（上传 → 建任务 → 轮询 → 下载全链路）：
+  - `pwish cutout` 抠图去背景，输出透明底 PNG
+  - `pwish upscale` 变清晰 / 放大，支持 `--type photo|general|text` 与 `--scale`
+  - `pwish restore` 高清修复（模糊、低清、老照片）
+  - `pwish bg` AI 换背景：内部先抠透明底再生成场景，一次返回多张候选
+  - `pwish dewatermark` 自动去水印
+  - `pwish erase` 去杂物 / 擦除，需 `--mask` 蒙版与可选 `--strength`
+  - `pwish colorize` 黑白照片上色
+  - `pwish convert` 图片格式转换（jpg / png / webp / bmp / gif）
+- `resultUrls` 统一结果解析：忽略预览图、蒙版与加速地址，自动兼容单图、多候选与 `answer` 结构
+- `test/tools.test.js`：工具结果解析与格式校验回归测试；args 测试补充工具参数与缺参提示
+
+### Changed
+
+- 帮助信息与 README / SKILL.md 增补图片工具章节、接口表与组合用法
+
 ## [0.1.5] - 2026-11-26
 
 ### Fixed

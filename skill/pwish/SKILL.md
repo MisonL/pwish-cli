@@ -1,6 +1,6 @@
 ---
 name: pwish
-description: 用 `pwish` 命令行工具调用佐糖 AI 设计师（picwish.cn/ai-design-create）做电商图：一句话生图、商品图换场景、白底主图、电商套图，并把结果下载到本地。当用户要生成商品图、电商图、白底图、场景图、模特图、套图，或提到佐糖/picwish/AI 设计师/一句话出图时使用。
+description: 用 `pwish` 命令行工具调用佐糖（picwish.cn）的图片能力：一句话生图、电商套图、抠图去背景、变清晰、高清修复、AI 换背景、去水印、去杂物、黑白上色、格式转换，并把结果下载到本地。当用户要生成商品图/电商图/白底图/场景图/模特图/套图，或要抠图、去背景、换背景、去水印、修图、放大清晰化、给老照片上色、改图片格式，以及提到佐糖/picwish/AI 设计师时使用。
 ---
 
 # 佐糖 AI 设计师（pwish CLI）
@@ -89,6 +89,31 @@ pwish suite -i ./product.jpg \
 
 **没有的能力**（用户要时直接说明做不到，别尝试用现有命令硬凑）：电商详情图、电商视频、
 套图的「场景展示图 / 多场景拼图」两个场景。站点上有这些功能，CLI 尚未支持。
+
+## 3.5 图片工具：一图一任务
+
+不走对话、不需提示词（`bg` 除外），一张图进、一张图出，几秒到一分钟完成：
+
+| 命令 | 作用 | 必填参数 | 输出 |
+|---|---|---|---|
+| `pwish cutout ./p.jpg` | 抠图去背景 | — | 透明底 PNG |
+| `pwish upscale ./p.jpg` | 变清晰 / 放大 | — | JPG；`--type photo\|general\|text`，`--scale 2` |
+| `pwish restore ./p.jpg` | 高清修复（模糊、低清、老照片） | — | JPG |
+| `pwish bg ./p.jpg --prompt "..."` | AI 换背景（内部先抠图） | `--prompt` | 1-4 张 JPG 候选 |
+| `pwish dewatermark ./p.jpg` | 自动去水印 | — | JPG |
+| `pwish erase ./p.jpg --mask ./m.png` | 去杂物 / 擦除 | `--mask` 蒙版图 | PNG；`--strength 1-5` 默认 3 |
+| `pwish colorize ./bw.jpg` | 黑白照片上色 | — | JPG |
+| `pwish convert ./p.png --format jpg` | 格式转换 | — | `jpg/png/webp/bmp/gif` |
+
+用法要点：
+
+- **抠图后换背景**：`pwish bg` 已包含抠图，不用先跑 `cutout`；只要透明底就单独用 `cutout`。
+- **`erase` 的蒙版**：白色（或任意非透明）区域 = 要擦掉的区域，尺寸应与原图一致。
+  用户没有蒙版图时，请让他用任意画图工具涂一块再导出，别自称能自动识别。
+- **组合流水线**：老照片修复常见顺序 `restore` → `colorize` → `dewatermark`，每步单独下载。
+- **额度和生图分开**：这些工具走各自的每日免费次数，不受生图模型算粒影响；`quota` 里看不到明细，
+  失败时报 `CREDIT_NOT_ENOUGH` 就是当日次数用完了。
+- 输出文件默认落在 `out/`，命名 `<原文件名>-<工具名>-<时间戳>`；`--no-download` 只打印 URL。
 
 ## 4. 结果查询与重下
 

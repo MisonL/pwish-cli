@@ -32,6 +32,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **本机登录页** | 微信扫码 / 手机号邮箱密码，视觉与官网一致，凭据不落盘 |
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
+| **图片工具** | 抠图、变清晰、高清修复、AI 换背景、去水印、去杂物、上色、格式转换 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
@@ -166,6 +167,15 @@ pwish models                          # 模型 / 比例 / 清晰度表
 pwish gen "提示词" -i 参考图 [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 目录]
 pwish suite -i 商品图 [--selling "卖点"] [--site amazon] [--scenes main,core,selling,material,person]
 
+pwish cutout ./photo.jpg              # 抠图 → 透明底 PNG
+pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
+pwish restore ./photo.jpg             # 高清修复（模糊 / 低清 / 老照片）
+pwish bg ./product.jpg --prompt "白色大理石台面"
+pwish dewatermark ./photo.jpg
+pwish erase ./photo.jpg --mask ./mask.png [--strength 3]
+pwish colorize ./bw-photo.jpg
+pwish convert ./photo.png --format jpg|png|webp|bmp|gif
+
 pwish history [--limit 20]
 pwish show <conversation_id>
 pwish task <task_id> [...]
@@ -189,6 +199,15 @@ pwish suite -i ./mug.jpg --selling "简约白瓷马克杯 350ml，可微波加�
 
 # 一次出 3 张备选
 pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
+
+# 商品图：抠透明底 → 换场景背景
+pwish cutout ./mug.jpg -o out/cut
+pwish bg ./mug.jpg --prompt "浅灰水泥台面，右侧窗光，浅景深" -o out/bg
+
+# 老图修复三连：变清晰 → 上色 → 去水印
+pwish restore ./old.jpg -o out/fix
+pwish colorize ./old.jpg -o out/fix
+pwish dewatermark ./old.jpg -o out/fix
 ```
 
 ## 模型
@@ -229,6 +248,14 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 | 会话列表/详情 | `GET image/conversations`、`GET image/conversations/{id}` |
 | 套图：AI 写提示词 | `POST tasks/login/suite/prompt` → `GET tasks/login/suite/prompt/{task_id}` |
 | 套图：出图 | `POST tasks/login/suite` → `GET tasks/login/suite/{task_id}` |
+| 抠图 | `POST tasks/login/segmentation` → `GET tasks/login/segmentation/{task_id}` |
+| 变清晰 | `POST tasks/login/scale` → `GET tasks/login/scale/{task_id}` |
+| 高清修复 | `POST tasks/login/scale-pro` → `GET tasks/login/scale-pro/{task_id}` |
+| AI 换背景 | `POST tasks/login/background` → `GET tasks/login/background/{task_id}` |
+| 去水印 | `POST tasks/login/auto-watermark-image` → `GET tasks/login/auto-watermark-image/{task_id}` |
+| 去杂物 | `POST tasks/login/object-refine` → `GET tasks/login/object-refine/{task_id}` |
+| 上色 | `POST tasks/login/colorization` → `GET tasks/login/colorization/{task_id}` |
+| 格式转换 | `POST tasks/image-conversion` → `GET tasks/image-conversion/{task_id}` |
 | 上传授权 | `POST authorizations/oss`（STS，随后 PUT 到 OSS 带 `x-oss-callback` 换 `resource_id`） |
 
 生成结果轮询到 `state=1`（或 `progress=100`）后，`answer[].file` 即图片 URL（OSS 签名约 2 小时有效）。
@@ -250,8 +277,8 @@ pwish skill --install
 - **视频生成未实现**：接口存在（`tasks/login/video-messages`），未验证也未封装。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
 - **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
-- **浏览器直读仅限 Chromium 系**：Chrome / Edge / Brave / Chromium / Arc / Vivaldi 可用；
-  **Safari 与 Firefox 不支持**，会自动回退到网页 OAuth。
+- **换背景需要提示词**：`pwish bg` 先用抠图得到透明底，再调背景生成；一次返回 1-4 张候选。
+- **去杂物需要蒙版**：`pwish erase` 的 `--mask` 是标注擦除区域的图，CLI 不做画布交互。
 - **上传单文件上限 20MB**（CLI 侧保护）。实际站点限制未逐一验证。
 
 **产品与环境限制**：
