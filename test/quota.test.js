@@ -27,7 +27,6 @@ test("summarizeQuota 归类模型 / 设计任务 / 工具", () => {
   assert.equal(q.designer.suite, 0);
   assert.equal(q.designer.detail, 1);
   assert.equal(toolRemainOf(q, "cutout"), 10);
-  assert.equal(q.tools.cutout.used, 2);
   assert.equal(toolRemainOf(q, "colorize"), undefined);
 });
 

@@ -33,10 +33,15 @@ const DESIGN_FIELDS = {
   text2img: ["llm_chat_num_general", "text_to_image_free_num"],
 };
 
-/** 图片工具 → { remain: 剩余字段, used?: 已用字段 }（只取能确认语义的字段）。 */
+/**
+ * 图片工具 → 剩余次数字段。
+ *
+ * 只取「还能用几次」这一列：站点另有一组 `*_used_free_num`，但实测对抠图、格式转换
+ * 连续成功调用后并不变化（翻译、扩图则会实时递减），语义无法确认，所以不展示、不参与判断。
+ */
 const TOOL_FIELDS = {
-  cutout: { remain: "segmentation_login_num", used: "segmentation_used_free_num" },
-  upscale: { remain: "scale_login_num", used: "scale_used_free_num" },
+  cutout: { remain: "segmentation_login_num" },
+  upscale: { remain: "scale_login_num" },
   restore: { remain: "scale_pro_gift" },
   expand: { remain: "image_expand_num" },
   bg: { remain: "background_free_num" },
@@ -60,9 +65,8 @@ function maxValue(data, fields) {
 
 function toolRemain(data, spec) {
   const remain = data[spec.remain];
-  if (typeof remain !== "number") return { remain: undefined, used: undefined };
-  const used = spec.used && typeof data[spec.used] === "number" ? data[spec.used] : undefined;
-  return { remain, used };
+  if (typeof remain !== "number") return { remain: undefined };
+  return { remain };
 }
 
 /** 把原始 all-free-counts 响应整理成 CLI 用的结构。 */

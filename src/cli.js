@@ -212,11 +212,10 @@ function padDisplay(text, width) {
   return text + " ".repeat(Math.max(0, width - shown));
 }
 
-function quotaCell(remain, used) {
+function quotaCell(remain) {
   if (remain === undefined) return `${dim}—${reset}`;
   const text = String(remain);
-  const colored = remain > 0 ? `${green}${text}${reset}` : `${yellow}${text}${reset}`;
-  return used === undefined ? colored : `${colored}${dim}（今日已用 ${used}）${reset}`;
+  return remain > 0 ? `${green}${text}${reset}` : `${yellow}${text}${reset}`;
 }
 
 /** 生成/处理前查一次额度，给出可读的预检结论。 */
@@ -287,8 +286,8 @@ async function cmdQuota(args) {
 
   say(`\n${cyan}图片工具（今日剩余次数）`);
   for (const [label, key] of TOOL_ROWS) {
-    const { remain, used } = quota.tools[key] || {};
-    say(`  ${padDisplay(label, 28)} ${quotaCell(remain, used)}`);
+    const { remain } = quota.tools[key] || {};
+    say(`  ${padDisplay(label, 28)} ${quotaCell(remain)}`);
   }
 
   if (!hasCredits(quota) && !quota.membership.isVip) {
