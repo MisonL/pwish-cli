@@ -472,6 +472,7 @@ export function collectInputs(parts) {
 
 async function cmdBatch(args) {
   const name = args._[1];
+  if (name === "gen") return cmdGenBatch(args);
   const tool = TOOLS[name];
   if (!tool) {
     throw new UserError(
@@ -534,6 +535,152 @@ async function cmdBatch(args) {
   say(`\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}`);
   for (const r of results.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
   if (ok) await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
+  return failed ? 1 : 0;
+}
+
+/**
+ * 批量生图的提示词分配：一条共用，或按行一一对应。
+ * 返回长度为 inputs 的数组；数量对不上直接报错，不猜。
+ */
+export function resolveBatchPrompts(inputs, { single, promptFileLines } = {}) {
+  if (Array.isArray(promptFileLines) && promptFileLines.length) {
+    if (promptFileLines.length === 1) return Array.from({ length: inputs }, () => promptFileLines[0]);
+    if (promptFileLines.length !== inputs) {
+      throw new UserError(`提示词 ${promptFileLines.length} 条，图片 ${inputs} 张，数量必须一致（或只给 1 条共用）`, "PROMPT_MISMATCH");
+    }
+    return promptFileLines;
+  }
+  const text = String(single || "").trim();
+  if (!text) throw new UserError('缺少提示词。用法：pwish batch gen ./photos --prompt "白底商品图"', "NO_PROMPT");
+  return Array.from({ length: inputs }, () => text);
+}
+
+/** 批量生图：一张参考图 + 一条提示词生成一张（或多张）。 */
+async function runGenOnce(client, { prompt, image, conversationId, model, ratio, sizeName, pattern, format, outDir, count, timeoutMs, download = true }) {
+  const files = [];
+  if (image) {
+    const up = await uploadFiles(client, [image]);
+    files.push(up[0].resourceId);
+  }
+  const payload = buildImageMessagePayload({
+    prompt,
+    conversationId,
+    modelId: model.id,
+    family: model.family,
+    files,
+    ratio,
+    sizeName,
+    pattern,
+    format,
+  });
+  const taskIds = [];
+  for (let i = 0; i < count; i += 1) {
+    const created = await createImageMessage(client, payload);
+    taskIds.push(created.task_id);
+  }
+  const done = await waitForTasks(client, taskIds, { timeoutMs });
+  const saved = [];
+  const urls = [];
+  const errors = [];
+  for (const taskId of taskIds) {
+    const item = done.get(taskId);
+    const imgs = imagesOf(item);
+    if (!imgs.length || item?.failed) {
+      errors.push(item?.error || "无图片返回");
+      continue;
+    }
+    for (const [i, img] of imgs.entries()) {
+      urls.push(img.url);
+      if (!download) continue;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const base = `${stamp}-${taskId.slice(0, 8)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
+      saved.push(await downloadImage(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png"));
+    }
+  }
+  return { taskIds, urls, saved, errors };
+}
+
+async function cmdGenBatch(args) {
+  const model = resolveModel(args.flags.model || args.flags.m);
+  const ratio = args.flags.ratio || args.flags.r || "auto";
+  const sizeName = (args.flags.size || args.flags.s || "2K").toUpperCase();
+  const pattern = (args.flags.mode || "economy").toLowerCase();
+  const format = (args.flags.format || args.flags.f || "png").toLowerCase();
+  const count = Math.max(1, Number(args.flags.n || 1));
+  const timeoutMs = Number(args.flags.timeout || 300) * 1000;
+  const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
+  if (!["economy", "stable"].includes(pattern)) throw new UserError("--mode 只能是 economy 或 stable");
+  if (!RATIOS.includes(ratio)) throw new UserError(`--ratio 不支持 ${ratio}，可用：${RATIOS.join(", ")}`);
+
+  const parts = args._.slice(2);
+  if (!parts.length) throw new UserError("用法：pwish batch gen ./photos --prompt \"白底商品图\"", "NO_INPUT");
+  const inputs = collectInputs(parts);
+  if (!inputs.length) throw new UserError("没有找到可处理的图片", "NO_INPUT");
+
+  const promptFileLines = args.flags["prompt-file"]
+    ? fs.readFileSync(args.flags["prompt-file"], "utf8").split("\n").map((x) => x.trim()).filter(Boolean)
+    : null;
+  const prompts = resolveBatchPrompts(inputs.length, {
+    single: args.flags.prompt || args.flags.p,
+    promptFileLines,
+  });
+
+  const client = clientFromConfig(args.flags);
+  const quota = await checkQuota(client, { kind: "model", key: model.key, label: `模型 ${model.key}：`, force: Boolean(args.flags.force) });
+  const remain = quota ? modelRemain(quota, model.key) : undefined;
+  if (remain !== undefined && inputs.length * count > remain && !args.flags.force) {
+    throw new UserError(
+      `需要 ${inputs.length * count} 次额度，但 ${model.key} 只剩 ${remain} 次。\n可以先跑前 ${Math.floor(remain / count)} 张，或加 --force 继续`,
+      "QUOTA_EXCEEDED",
+    );
+  }
+
+  let conversationId = args.flags.conv || args.flags.conversation;
+  if (!conversationId) conversationId = (await createConversation(client)).conversation_id;
+
+  const concurrency = Math.max(1, Math.min(4, Number(args.flags.concurrency || 1)));
+  const results = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < inputs.length) {
+      const index = cursor++;
+      const image = inputs[index];
+      const label = `[${index + 1}/${inputs.length}] ${path.basename(image)}`;
+      try {
+        log(`${dim}${label} 生成中…${reset}`);
+        const out = await runGenOnce(client, {
+          prompt: prompts[index],
+          image,
+          conversationId,
+          model,
+          ratio,
+          sizeName,
+          pattern,
+          format,
+          outDir,
+          count,
+          timeoutMs,
+          download: !args.flags["no-download"],
+        });
+        results[index] = { file: image, ok: out.saved.length > 0, urls: out.urls, files: out.saved.map((d) => d.file), errors: out.errors };
+        say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
+      } catch (err) {
+        results[index] = { file: image, ok: false, error: err.message };
+        say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, worker));
+
+  const ok = results.filter((r) => r.ok).length;
+  const failed = results.length - ok;
+  if (args.flags.json) {
+    json({ tool: "gen", conversationId, model: model.key, total: inputs.length, ok, failed, results });
+    return failed ? 1 : 0;
+  }
+  say(`\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}  会话: ${conversationId}`);
+  for (const r of results.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
+  if (ok) await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key });
   return failed ? 1 : 0;
 }
 
@@ -1019,7 +1166,8 @@ ${cyan}图片工具（一图一任务，直接出图）
 ${cyan}批量处理（对目录里的图片跑同一个工具）
   pwish batch cutout ./photos -o out/cut          批量抠图
   pwish batch translate ./photos --from CHS --to ENG
-  可选：--concurrency 2 并发（默认 1，最多 4）
+  pwish batch gen ./photos --prompt "白底商品图"   批量生图（一张参考图配一条提示词）
+  可选：--concurrency 2 并发（默认 1，最多 4） --prompt-file prompts.txt 按行对应
 
 ${cyan}查询与下载
   pwish task <task_id> [...]    查询任务状态

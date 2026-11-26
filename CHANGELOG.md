@@ -5,6 +5,25 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-26
+
+### Added
+
+- **`pwish batch gen <目录> --prompt "..."`**：批量生图，每张参考图各出一张（`--n` 可多张），
+  整批共用一个会话；`--prompt-file` 每行对应一张，单行则复用；条数与图片数不一致直接报错
+  - 已实测：1 张图 → 1 张成品（nano-banana-pro）
+  - 按「张数 × --n」核对模型额度，超额直接拦下，`--force` 可越过
+
+### Changed
+
+- 抽出 `resolveBatchPrompts`（提示词分配）与 `describeApiError`（错误码翻译）两个纯函数，便于单测
+- `loginWithToken` 的格式提示不再提浏览器 localStorage，改为「`pwish login` 拿到的 token」
+
+### Tests
+
+- 94 条（原 78）：新增 `test/api.test.js`（错误码映射 4 条）、`test/upload.test.js`（MIME 与 OSS 签名 4 条）、
+  `test/gen-batch.test.js`（提示词分配 4 条）、`test/quota.test.js` 边界 4 条
+
 ## [0.8.0] - 2026-11-26
 
 ### Added

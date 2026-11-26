@@ -15,6 +15,15 @@ const API_ERRORS = {
   401: ["UNAUTHORIZED", "登录态失效，请重新执行 `pwish login`"],
 };
 
+/** 把接口状态码翻译成「人话 + 错误码」，抽出来便于单测。 */
+export function describeApiError(status, json = {}) {
+  const mapped = API_ERRORS[String(status)];
+  const message = mapped
+    ? `${mapped[1]}（${mapped[0]}）${json.message ? ` · ${json.message}` : ""}`
+    : `接口返回 ${status}${json.message ? `：${json.message}` : ""}`;
+  return { message, code: mapped?.[0] || `API_${status}` };
+}
+
 export class ApiError extends Error {
   constructor(message, { status, code, payload } = {}) {
     super(message);
@@ -78,11 +87,8 @@ export function createClient(overrides = {}) {
 
     const status = Number(json.status ?? res.status);
     if (status !== 200) {
-      const mapped = API_ERRORS[String(status)];
-      const message = mapped
-        ? `${mapped[1]}（${mapped[0]}）${json.message ? ` · ${json.message}` : ""}`
-        : `接口返回 ${status}${json.message ? `：${json.message}` : ""}`;
-      throw new ApiError(message, { status: res.status, code: mapped?.[0] || `API_${status}`, payload: json });
+      const { message, code } = describeApiError(status, json);
+      throw new ApiError(message, { status: res.status, code, payload: json });
     }
     return json;
   }
@@ -102,7 +108,7 @@ export function createClient(overrides = {}) {
 export function loginWithToken(token) {
   if (!token || !/^v2,/.test(token.trim())) {
     throw new UserError(
-      "token 格式看起来不对。它来自浏览器 localStorage 的 passport_api_token，形如 `v2,<user_id>,482,<secret>`。",
+      "token 格式看起来不对。`pwish login` 拿到的 token 形如 `v2,<user_id>,482,<secret>`。",
       "BAD_TOKEN",
     );
   }

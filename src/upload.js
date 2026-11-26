@@ -13,11 +13,11 @@ const MIME = {
   ".heic": "image/heic",
 };
 
-function mimeOf(file) {
+export function mimeOf(file) {
   return MIME[path.extname(file).toLowerCase()] || "application/octet-stream";
 }
 
-function ossV1Signature({ verb, contentMd5 = "", mime, date, ossHeaders, bucket, key, secret }) {
+export function ossV1Signature({ verb, contentMd5 = "", mime, date, ossHeaders, bucket, key, secret }) {
   const canonicalHeaders = Object.entries(ossHeaders)
     .map(([k, v]) => [k.toLowerCase(), v])
     .sort(([a], [b]) => (a > b ? 1 : a < b ? -1 : 0))

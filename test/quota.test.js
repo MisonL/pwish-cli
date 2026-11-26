@@ -62,3 +62,36 @@ test("preflight 对套图 / 工具给出与功能对应的提示", () => {
   // 未知字段不误判为 0
   assert.equal(preflight(q, { kind: "tool", modelKey: "colorize" }).level, "ok");
 });
+
+test("summarizeQuota 对字段缺失/类型异常保持克制", () => {
+  const q = summarizeQuota({});
+  assert.equal(q.membership.isVip, false);
+  assert.equal(q.membership.licenseType, "free");
+  assert.equal(q.credits.free, 0);
+  assert.deepEqual(q.models, {});
+  assert.equal(toolRemainOf(q, "cutout"), undefined);
+
+  // 字符串数字不应被当成有效额度，避免把 "0" 误判为 0 次
+  const weird = summarizeQuota({ segmentation_login_num: "8", llm_chat_num_gm30: null });
+  assert.equal(toolRemainOf(weird, "cutout"), undefined);
+  assert.equal(modelRemain(weird, "gemini-3"), undefined);
+});
+
+test("会员字段为字符串时仍能识别（vip=\"1\"）", () => {
+  const q = summarizeQuota({ vip: "1", local_vip_quota: { is_vip: 0 } });
+  assert.equal(q.membership.isVip, true);
+});
+
+test("preflight 在额度未知时不拦截", () => {
+  const q = summarizeQuota({});
+  assert.equal(preflight(q, { kind: "model", modelKey: "gemini-3" }).level, "ok");
+  assert.equal(preflight(q, { kind: "tool", modelKey: "cutout" }).level, "ok");
+  assert.equal(preflight(q, { kind: "design", modelKey: "suite" }).level, "ok");
+});
+
+test("hasCredits 统计免费算粒与会员算粒", () => {
+  assert.equal(hasCredits(summarizeQuota({ free_point: 3 })), true);
+  assert.equal(hasCredits(summarizeQuota({ all_free_point: 1 })), true);
+  assert.equal(hasCredits(summarizeQuota({ local_vip_quota: { gemini_remain: 2 } })), true);
+  assert.equal(hasCredits(summarizeQuota({ local_vip_quota: { gemini_remain: 0 } })), false);
+});
