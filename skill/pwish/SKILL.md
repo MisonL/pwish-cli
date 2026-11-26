@@ -135,6 +135,7 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 | `pwish erase ./p.jpg --mask ./m.png` | 去杂物 / 擦除 | `--mask` 蒙版图 | PNG；`--strength 1-5` 默认 3 |
 | `pwish colorize ./bw.jpg` | 黑白照片上色 | — | JPG |
 | `pwish convert ./p.png --format jpg` | 格式转换 | — | `jpg/png/webp/bmp/gif` |
+| `pwish batch <工具> <目录>` | 批量跑同一个工具 | 同单图参数 | 同该工具 |
 
 用法要点：
 
@@ -145,6 +146,10 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **扩图**：`--to 16:9` 会按原图尺寸自动算左右外扩量；只想手动控制就用
   `--left/--right/--top/--bottom`（0-1 的比例，0.2 表示外扩原边长的 20%）。改比例前先确认用途，
   竖图转横图方向搞反会得到“被压扁”的构图。
+- **批量**：`pwish batch cutout ./photos -o out/cut` 会对目录里所有图片依次跑同一个工具，
+  逐张打印成败，任一张失败不影响其它张，最后汇总 `完成 N/M`；有失败时退出码为 1。
+  开跑前会核对剩余额度，张数超过剩余次数会直接拦下（除非加 `--force`）。并发用
+  `--concurrency 2`（默认 1，最多 4），并发越高越容易撞服务端限流。
 - **图片翻译**：默认中译英（`--from CHS --to ENG`），语言码用三字母大写（CHS/CHT/ENG/JPN/KOR/FRA/DEU/
   ESP/POR/PTB/ROM/RUS/VIN/ARA/THA）。译文替换画面文字、保留原有版式，适合把国内详情图换语种重投。
   源语言写 `auto` 服务端会直接返回 `task failed`（实测），所以要按图片实际语种传 `CHS` 等具体语言码。

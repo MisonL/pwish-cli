@@ -34,6 +34,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
 | **图片工具** | 抠图、变清晰、高清修复、图像扩展、图片翻译、AI 换背景、去水印、去杂物、上色、格式转换 |
+| **批量处理** | 对一个目录里的图片批量跑同一个工具，逐张报告成败 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
@@ -176,6 +177,9 @@ CLI 对会员、算粒、免费额度的处理是「先看再跑、跑完回读�
 额度数据来自 `GET vips/all-free-counts`，字段语义按站点功能对应；无法确认的字段不猜，
 在表里显示为 `—`。
 
+`pwish batch` 会在开跑前用当前工具的剩余额度做一次校验：待处理张数超过剩余次数时直接拦下，
+避免跑到一半才发现额度不够。
+
 ## 命令
 
 ```bash
@@ -193,6 +197,7 @@ pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
 pwish restore ./photo.jpg             # 高清修复（模糊 / 低清 / 老照片）
 pwish expand ./photo.jpg --to 16:9    # 图像扩展：自动算四边外扩量
 pwish translate ./poster.jpg --to ENG # 图片翻译：保留版式替换文字
+pwish batch cutout ./photos -o out/cut   # 批量抠图（目录里所有图片）
 pwish bg ./product.jpg --prompt "白色大理石台面"
 pwish dewatermark ./photo.jpg
 pwish erase ./photo.jpg --mask ./mask.png [--strength 3]
@@ -229,6 +234,9 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 
 # 竖图改成 16:9 横版（电商主图 / 详情页头图）
 pwish expand ./mug.jpg --to 16:9 -o out/wide
+
+# 一个目录里的商品图全部抠成透明底
+pwish batch cutout ./photos -o out/cut --concurrency 2
 
 # 中文海报换成英文版（文字替换，版式保留）
 pwish translate ./poster.jpg --from CHS --to ENG -o out/en

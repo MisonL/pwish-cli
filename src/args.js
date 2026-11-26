@@ -6,6 +6,7 @@ const VALUE_FLAGS = new Set([
   "image", "i", "conv", "conversation", "timeout", "poll", "token", "selling", "site",
   "country", "lang", "scenes", "prompt-file", "limit", "page", "port", "dir",
   "prompt", "p", "mask", "strength", "scale", "type", "to", "from", "left", "right", "top", "bottom",
+  "concurrency",
 ]);
 
 /** 纯开关（不需要值）。 */

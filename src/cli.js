@@ -360,15 +360,8 @@ const TOOLS = {
   convert: { label: "格式转换", run: convertFormat, ext: "" },
 };
 
-async function cmdTool(name, args) {
-  const tool = TOOLS[name];
-  if (!tool) throw new UserError(`未知工具：${name}`, "UNKNOWN_TOOL");
-
-  let image = args.flags.image || args.flags.i || args._[1] || "";
-  if (!image) throw new UserError(`缺少输入图片。用法：pwish ${name} ./photo.jpg`, "NO_INPUT");
-  if (!fs.existsSync(image)) throw new UserError(`文件不存在：${image}`, "NO_FILE");
-
-  const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
+/** 由命令行参数拼出某个工具的运行参数（单图与批量共用）。 */
+function toolOptions(name, args, image) {
   const opts = { file: image, timeoutMs: Number(args.flags.timeout || 600) * 1000 };
   if (name === "upscale") {
     const t = String(args.flags.type || "").toLowerCase();
@@ -400,22 +393,19 @@ async function cmdTool(name, args) {
   if (name === "convert") {
     opts.format = String(args.flags.format || args.flags.f || "png").toLowerCase();
   }
+  return opts;
+}
 
-  const client = clientFromConfig(args.flags);
+/** 跑一个工具并下载结果；返回 { taskId, urls, saved }。 */
+async function runToolOnce(client, name, image, args, { quiet = false } = {}) {
+  const tool = TOOLS[name];
+  const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
+  const opts = toolOptions(name, args, image);
 
-  await checkQuota(client, {
-    kind: "tool",
-    key: name,
-    label: `${tool.label}：`,
-    force: Boolean(args.flags.force),
-  });
-
-  log(`${dim}${tool.label}：${path.basename(image)}`);
+  if (!quiet) log(`${dim}${tool.label}：${path.basename(image)}`);
   const { taskId, data } = await tool.run(client, opts);
   const urls = resultUrls(data);
-  if (!urls.length) {
-    throw new ApiError(`${tool.label}未返回图片`, { code: "NO_RESULT", payload: data });
-  }
+  if (!urls.length) throw new ApiError(`${tool.label}未返回图片`, { code: "NO_RESULT", payload: data });
 
   const saved = [];
   if (!args.flags["no-download"]) {
@@ -426,6 +416,28 @@ async function cmdTool(name, args) {
       saved.push(await downloadImage(url, outDir, base, ext));
     }
   }
+  return { taskId, urls, saved };
+}
+
+async function cmdTool(name, args) {
+  const tool = TOOLS[name];
+  if (!tool) throw new UserError(`未知工具：${name}`, "UNKNOWN_TOOL");
+
+  const image = args.flags.image || args.flags.i || args._[1] || "";
+  if (!image) throw new UserError(`缺少输入图片。用法：pwish ${name} ./photo.jpg`, "NO_INPUT");
+  if (!fs.existsSync(image)) throw new UserError(`文件不存在：${image}`, "NO_FILE");
+
+  const opts = toolOptions(name, args, image);
+  const client = clientFromConfig(args.flags);
+
+  await checkQuota(client, {
+    kind: "tool",
+    key: name,
+    label: `${tool.label}：`,
+    force: Boolean(args.flags.force),
+  });
+
+  const { taskId, urls, saved } = await runToolOnce(client, name, image, args);
 
   if (args.flags.json) {
     json({ tool: name, taskId, images: urls, files: saved.map((d) => d.file) });
@@ -436,6 +448,93 @@ async function cmdTool(name, args) {
   if (args.flags["no-download"]) for (const u of urls) say(`  ${u}`);
   await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
   return 0;
+}
+
+const IMAGE_EXT = /\.(jpe?g|png|webp|bmp|gif|heic|avif)$/i;
+
+/** 把位置参数展开成图片列表：目录取一层图片，文件原样保留。 */
+export function collectInputs(parts) {
+  const files = [];
+  for (const part of parts) {
+    if (!fs.existsSync(part)) throw new UserError(`路径不存在：${part}`, "NO_FILE");
+    const stat = fs.statSync(part);
+    if (stat.isDirectory()) {
+      for (const name of fs.readdirSync(part).sort()) {
+        const abs = path.join(part, name);
+        if (fs.statSync(abs).isFile() && IMAGE_EXT.test(name)) files.push(abs);
+      }
+    } else {
+      files.push(part);
+    }
+  }
+  return files;
+}
+
+async function cmdBatch(args) {
+  const name = args._[1];
+  const tool = TOOLS[name];
+  if (!tool) {
+    throw new UserError(
+      `用法：pwish batch <工具> <目录|文件...>\n可用工具：${Object.keys(TOOLS).join(", ")}`,
+      "UNKNOWN_TOOL",
+    );
+  }
+  const parts = args._.slice(2);
+  if (!parts.length) throw new UserError("用法：pwish batch cutout ./photos -o out/cut", "NO_INPUT");
+  const inputs = collectInputs(parts);
+  if (!inputs.length) throw new UserError("没有找到可处理的图片", "NO_INPUT");
+
+  const client = clientFromConfig(args.flags);
+  const quota = await checkQuota(client, {
+    kind: "tool",
+    key: name,
+    label: `${tool.label}：`,
+    force: Boolean(args.flags.force),
+  });
+  const remain = quota ? toolRemainOf(quota, name) : undefined;
+  if (remain !== undefined && inputs.length > remain && !args.flags.force) {
+    throw new UserError(
+      `${tool.label} 待处理 ${inputs.length} 张，但只剩 ${remain} 次免费额度。\n` +
+        `可以先跑前 ${remain} 张，或加 --force 继续（超出部分可能失败）`,
+      "QUOTA_EXCEEDED",
+    );
+  }
+
+  const concurrency = Math.max(1, Math.min(4, Number(args.flags.concurrency || 1)));
+  const results = [];
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < inputs.length) {
+      const index = cursor++;
+      const file = inputs[index];
+      const label = `[${index + 1}/${inputs.length}] ${path.basename(file)}`;
+      try {
+        log(`${dim}${label} ${tool.label}…${reset}`);
+        const out = await runToolOnce(client, name, file, args, { quiet: true });
+        results[index] = { file, ok: true, taskId: out.taskId, files: out.saved.map((d) => d.file) };
+        say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
+      } catch (err) {
+        results[index] = { file, ok: false, error: err.message };
+        say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, worker));
+
+  const ok = results.filter((r) => r.ok).length;
+  const failed = results.length - ok;
+
+  if (args.flags.json) {
+    json({ tool: name, total: inputs.length, ok, failed, results });
+    return failed ? 1 : 0;
+  }
+
+  say(`\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}`);
+  for (const r of results.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
+  if (ok) await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
+  return failed ? 1 : 0;
 }
 
 async function cmdGen(args) {
@@ -917,6 +1016,11 @@ ${cyan}图片工具（一图一任务，直接出图）
   pwish colorize ./bw-photo.jpg                   黑白照片上色
   pwish convert ./photo.png --format jpg          格式转换（jpg/png/webp/bmp/gif）
 
+${cyan}批量处理（对目录里的图片跑同一个工具）
+  pwish batch cutout ./photos -o out/cut          批量抠图
+  pwish batch translate ./photos --from CHS --to ENG
+  可选：--concurrency 2 并发（默认 1，最多 4）
+
 ${cyan}查询与下载
   pwish task <task_id> [...]    查询任务状态
   pwish history [--limit 20]    历史会话
@@ -973,6 +1077,8 @@ export async function main(argv) {
     case "colorize":
     case "convert":
       return cmdTool(cmd, args);
+    case "batch":
+      return cmdBatch(args);
     case "gen":
     case "draw":
     case "create":
