@@ -251,7 +251,12 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
 
       sendHtml(404, renderErrorPage("未知路径"));
     } catch (err) {
-      sendHtml(500, renderErrorPage(`服务异常：${escapeHtml(err.message)}`));
+      // /api/* 必须回 JSON，否则前端解析 HTML 失败，用户只会看到「无法连接本机服务」
+      if (url.pathname.startsWith("/api/")) {
+        sendJson(500, { message: `服务异常：${err.message}` });
+      } else {
+        sendHtml(500, renderErrorPage(`服务异常：${escapeHtml(err.message)}`));
+      }
     }
   });
 
@@ -272,6 +277,14 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
   return new Promise((resolve, reject) => {
     server.once("error", (err) => {
       clearTimeout(timer);
+      if (err.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `端口 ${port} 已被占用。换一个端口重试：pwish login --port ${port + 1}，或省略 --port 让系统自动分配`,
+          ),
+        );
+        return;
+      }
       reject(err);
     });
     server.listen(port, host, () => {

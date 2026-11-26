@@ -148,3 +148,25 @@ test("超时会 reject", async () => {
 test("CODE_TTL 为 60 秒", () => {
   assert.equal(CODE_TTL_MS, 60_000);
 });
+
+test("端口占用时给出可读的错误提示", async () => {
+  const a = await startAuthServer({ timeoutMs: 5000 });
+  await assert.rejects(
+    () => startAuthServer({ timeoutMs: 5000, port: a.port }),
+    /端口 .* 已被占用/,
+  );
+  await a.close();
+});
+
+test("/api/* 异常时返回 JSON 而非 HTML", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000 });
+  // 伪造 hashKey 触发上游调用，当前网络环境下至少不会返回 HTML
+  const res = await fetch(`${auth.origin}/api/qrcode/poll`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hashKey: "bad-key" }),
+  });
+  const text = await res.text();
+  assert.ok(!text.startsWith("<!doctype"), "API 错误不应返回 HTML");
+  await auth.close();
+});

@@ -109,21 +109,3 @@ export async function pollWechatQr(hashKey) {
   const result = tokenFrom(payload);
   return { status: "ok", ...result };
 }
-
-/** 获取用户资料（登录成功后用于展示昵称/头像）。 */
-export async function fetchProfile(token, userId) {
-  if (!userId) return null;
-  try {
-    const url = new URL(`${PASSPORT_BASE}/users/${userId}`);
-    url.searchParams.set("product_id", "482");
-    url.searchParams.set("language", "zh");
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Origin: "https://picwish.cn" },
-      signal: AbortSignal.timeout(10_000),
-    });
-    const payload = await res.json();
-    return payload?.data ?? null;
-  } catch {
-    return null;
-  }
-}

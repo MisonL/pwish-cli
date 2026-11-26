@@ -47,7 +47,12 @@ async function persistToken(token, { json: asJson = false } = {}) {
 
 async function oauthLogin(args) {
   const timeoutMs = Number(args.flags.timeout || 600) * 1000;
-  const auth = await startAuthServer({ timeoutMs, port: Number(args.flags.port || 0) });
+  let auth;
+  try {
+    auth = await startAuthServer({ timeoutMs, port: Number(args.flags.port || 0) });
+  } catch (err) {
+    throw new UserError(`无法启动本机授权服务：${err.message}`, "AUTH_SERVER_FAILED");
+  }
   log(`${cyan}已启动本机授权服务${reset} http://127.0.0.1:${auth.port}`);
   log(`${dim}OAuth 2.0 授权码 + PKCE(S256) · 仅监听 127.0.0.1 · 等待上限 ${Math.round(timeoutMs / 60000)} 分钟${reset}`);
   log("");
