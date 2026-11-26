@@ -57,3 +57,16 @@ test("convertFormat 接受常见格式别名", async () => {
   // 只验证参数校验阶段：jpeg 会被归一成 jpg，随后才会因为缺少 client 失败
   await assert.rejects(() => convertFormat({}, { file: "/tmp/x.png", format: "jpeg" }), (err) => !/不支持的格式/.test(err.message));
 });
+
+test("resultUrls 支持扩图的 image1-4 结构，忽略原图占位", () => {
+  const data = {
+    state: 1,
+    progress: 100,
+    image1: "https://cdn.example.com/exp-1.png",
+    image2: "https://cdn.example.com/exp-2.png",
+    image3: "",
+    ori_image1: "https://cdn.example.com/ori-1.png",
+    accelerate_image1: "https://cdn.example.com/exp-1-accel.png",
+  };
+  assert.deepEqual(resultUrls(data), ["https://cdn.example.com/exp-1.png", "https://cdn.example.com/exp-2.png"]);
+});

@@ -38,6 +38,7 @@ const TOOL_FIELDS = {
   cutout: { remain: "segmentation_login_num", used: "segmentation_used_free_num" },
   upscale: { remain: "scale_login_num", used: "scale_used_free_num" },
   restore: { remain: "scale_pro_gift" },
+  expand: { remain: "image_expand_num" },
   bg: { remain: "background_free_num" },
   dewatermark: { remain: "watermark_image_free_num" },
   erase: { remain: "object_refine_num" },

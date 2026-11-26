@@ -75,6 +75,55 @@ export function upscale(client, { file, type = 1, scaleFactor = 2, timeoutMs = 3
   });
 }
 
+const TARGET_ASPECT = { "1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4, "16:9": 16 / 9, "9:16": 9 / 16, "3:2": 3 / 2, "2:3": 2 / 3 };
+
+/**
+ * 图像扩展（扩图）：按比例向四边外扩，或用 `to` 目标画幅自动计算外扩量。
+ * 四边取值 0-1，表示相对原图各边长的外扩比例。
+ */
+export async function expandImage(client, { file, to, left, right, top, bottom, timeoutMs = 300_000 } = {}) {
+  const up = await uploadFile(client, file, PREFIX.general);
+  const edges = { left: Number(left) || 0, right: Number(right) || 0, top: Number(top) || 0, bottom: Number(bottom) || 0 };
+  if (to) {
+    const target = TARGET_ASPECT[String(to)];
+    if (!target) throw new Error(`不支持的目标画幅：${to}（可用：${Object.keys(TARGET_ASPECT).join(" / ")}）`);
+    const { width, height } = up;
+    if (!width || !height) throw new Error("无法读取图片尺寸，改用 --left/--right/--top/--bottom 指定外扩比例");
+    const current = width / height;
+    if (target > current) {
+      const grow = (target / current - 1) / 2;
+      edges.left = grow;
+      edges.right = grow;
+    } else if (target < current) {
+      const grow = (current / target - 1) / 2;
+      edges.top = grow;
+      edges.bottom = grow;
+    }
+  }
+  if (!edges.left && !edges.right && !edges.top && !edges.bottom) {
+    throw new Error("至少需要一边外扩：用 --to 16:9 或 --left 0.25 之类的比例");
+  }
+
+  const body = {
+    source_resource_id: up.resourceId,
+    image_count: 1,
+    ...edges,
+    prompt: "",
+    negative_prompt: "",
+    size: "",
+    from: "",
+    conversation_id: "",
+    mask_resource_id: "",
+    resource_id: "",
+    provider: 2,
+    horizontal_expansion_ratio: 1,
+    vertical_expansion_ratio: 1,
+  };
+  const taskId = await create(client, "tasks/login/self-image-expand", body, "扩图");
+  const data = await poll(client, "tasks/login/self-image-expand", taskId, timeoutMs);
+  return { taskId, data, resourceId: up.resourceId };
+}
+
 /** 高清修复（老照片 / 模糊低清图的超分修复）。 */
 export function restorePhoto(client, { file, type = 0, timeoutMs = 300_000 } = {}) {
   return run(client, {
@@ -179,9 +228,9 @@ export async function convertFormat(client, { file, format = "png", timeoutMs = 
   return { taskId, data, resourceId, format: target };
 }
 
-const PRIMARY_KEYS = /^(image|image_\d+|file|url|image_url|result_url|output)$/;
-/** 预览图、蒙版、加速地址都不算正式结果。 */
-const IGNORE_KEYS = /^(small_image|mask|mask_data|thumbnail|cover|accelerate_)/;
+const PRIMARY_KEYS = /^(image|image_?\d+|file|url|image_url|result_url|output)$/;
+/** 预览图、蒙版、原图占位、加速地址都不算正式结果。 */
+const IGNORE_KEYS = /^(small_image|mask|mask_data|thumbnail|cover|accelerate_|ori_image)/;
 
 /** 从任意任务结果里提取图片 URL（优先正式结果，忽略预览图与蒙版）。 */
 export function resultUrls(data) {

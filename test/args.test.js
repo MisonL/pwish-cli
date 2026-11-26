@@ -79,6 +79,14 @@ test("图片工具相关 flag 解析正确", () => {
   assert.equal(d.flags.scale, "4");
 });
 
+test("扩图参数解析正确", () => {
+  const a = parseArgs(["expand", "./p.jpg", "--to", "16:9"]);
+  assert.equal(a.flags.to, "16:9");
+  const b = parseArgs(["expand", "./p.jpg", "--left", "0.3", "--top", "0.1"]);
+  assert.equal(b.flags.left, "0.3");
+  assert.equal(b.flags.top, "0.1");
+});
+
 test("CLI 图片工具缺少必填参数时给出明确提示", async () => {
   const os = await import("node:os");
   const path = await import("node:path");

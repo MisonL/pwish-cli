@@ -33,7 +33,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
-| **图片工具** | 抠图、变清晰、高清修复、AI 换背景、去水印、去杂物、上色、格式转换 |
+| **图片工具** | 抠图、变清晰、高清修复、图像扩展、AI 换背景、去水印、去杂物、上色、格式转换 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
@@ -191,6 +191,7 @@ pwish detail -i 商品图 --selling "卖点" [--scenes poster,highlights,feature
 pwish cutout ./photo.jpg              # 抠图 → 透明底 PNG
 pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
 pwish restore ./photo.jpg             # 高清修复（模糊 / 低清 / 老照片）
+pwish expand ./photo.jpg --to 16:9    # 图像扩展：自动算四边外扩量
 pwish bg ./product.jpg --prompt "白色大理石台面"
 pwish dewatermark ./photo.jpg
 pwish erase ./photo.jpg --mask ./mask.png [--strength 3]
@@ -224,6 +225,9 @@ pwish detail -i ./mug.jpg --selling "简约白瓷马克杯 350ml，可微波加�
 
 # 一次出 3 张备选
 pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
+
+# 竖图改成 16:9 横版（电商主图 / 详情页头图）
+pwish expand ./mug.jpg --to 16:9 -o out/wide
 
 # 商品图：抠透明底 → 换场景背景
 pwish cutout ./mug.jpg -o out/cut
@@ -279,6 +283,7 @@ pwish dewatermark ./old.jpg -o out/fix
 | 抠图 | `POST tasks/login/segmentation` → `GET tasks/login/segmentation/{task_id}` |
 | 变清晰 | `POST tasks/login/scale` → `GET tasks/login/scale/{task_id}` |
 | 高清修复 | `POST tasks/login/scale-pro` → `GET tasks/login/scale-pro/{task_id}` |
+| 图像扩展 | `POST tasks/login/self-image-expand` → `GET tasks/login/self-image-expand/{task_id}` |
 | AI 换背景 | `POST tasks/login/background` → `GET tasks/login/background/{task_id}` |
 | 去水印 | `POST tasks/login/auto-watermark-image` → `GET tasks/login/auto-watermark-image/{task_id}` |
 | 去杂物 | `POST tasks/login/object-refine` → `GET tasks/login/object-refine/{task_id}` |

@@ -5,7 +5,7 @@ const VALUE_FLAGS = new Set([
   "model", "m", "ratio", "r", "size", "s", "mode", "format", "f", "n", "out", "o",
   "image", "i", "conv", "conversation", "timeout", "poll", "token", "selling", "site",
   "country", "lang", "scenes", "prompt-file", "limit", "page", "port", "dir",
-  "prompt", "p", "mask", "strength", "scale", "type",
+  "prompt", "p", "mask", "strength", "scale", "type", "to", "left", "right", "top", "bottom",
 ]);
 
 /** 纯开关（不需要值）。 */

@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-26
+
+### Added
+
+- **`pwish expand` 图像扩展**：按目标画幅（`--to 16:9`）或四边比例（`--left/--right/--top/--bottom`，0-1）外扩，
+  已实测（512×512 扩到 16:9，返回 `image1`-`image4`）
+- `resultUrls` 兼容 `image1`-`image4` 与 `ori_image*`（原图占位不下载）
+- 扩图接入额度预检与回读（`image_expand_num`），补扩图参数与结果解析测试
+
 ## [0.5.0] - 2026-11-26
 
 ### Added

@@ -11,6 +11,7 @@ import {
   removeWatermark,
   removeObject,
   restorePhoto,
+  expandImage,
   colorize,
   convertFormat,
   resultUrls,
@@ -188,6 +189,7 @@ const TOOL_ROWS = [
   ["抠图", "cutout"],
   ["变清晰", "upscale"],
   ["高清修复", "restore"],
+  ["图像扩展", "expand"],
   ["换背景", "bg"],
   ["去水印", "dewatermark"],
   ["去杂物", "erase"],
@@ -344,6 +346,7 @@ const TOOLS = {
   dewatermark: { label: "去水印", run: removeWatermark, ext: ".png" },
   erase: { label: "去杂物", run: removeObject, ext: ".png" },
   restore: { label: "高清修复", run: restorePhoto, ext: ".jpg" },
+  expand: { label: "图像扩展", run: expandImage, ext: ".png" },
   colorize: { label: "黑白上色", run: colorize, ext: ".png" },
   convert: { label: "格式转换", run: convertFormat, ext: "" },
 };
@@ -364,6 +367,12 @@ async function cmdTool(name, args) {
     if (args.flags.scale) opts.scaleFactor = Number(args.flags.scale);
   }
   if (name === "restore" && args.flags.type) opts.type = Number(args.flags.type);
+  if (name === "expand") {
+    opts.to = args.flags.to || "";
+    for (const edge of ["left", "right", "top", "bottom"]) {
+      if (args.flags[edge] !== undefined) opts[edge] = args.flags[edge];
+    }
+  }
   if (name === "bg") {
     opts.prompt = String(args.flags.prompt || args.flags.p || "").trim();
     if (!opts.prompt) throw new UserError('缺少背景描述。用法：pwish bg ./product.jpg --prompt "纯白影棚背景"', "NO_PROMPT");
@@ -887,6 +896,7 @@ ${cyan}图片工具（一图一任务，直接出图）
   pwish cutout ./photo.jpg                        抠图去背景 → 透明底 PNG
   pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]   变清晰/放大
   pwish restore ./photo.jpg                       高清修复（模糊、低清、老照片）
+  pwish expand ./photo.jpg --to 16:9              图像扩展/扩图（也可 --left 0.2 --top 0.1）
   pwish bg ./product.jpg --prompt "白色大理石台面"  AI 换背景（自动先抠图）
   pwish dewatermark ./photo.jpg                   自动去水印
   pwish erase ./photo.jpg --mask ./mask.png [--strength 3]  去杂物/擦除
@@ -943,6 +953,7 @@ export async function main(argv) {
     case "dewatermark":
     case "erase":
     case "restore":
+    case "expand":
     case "colorize":
     case "convert":
       return cmdTool(cmd, args);

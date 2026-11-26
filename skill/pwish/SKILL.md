@@ -128,6 +128,7 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 | `pwish cutout ./p.jpg` | 抠图去背景 | — | 透明底 PNG |
 | `pwish upscale ./p.jpg` | 变清晰 / 放大 | — | JPG；`--type photo\|general\|text`，`--scale 2` |
 | `pwish restore ./p.jpg` | 高清修复（模糊、低清、老照片） | — | JPG |
+| `pwish expand ./p.jpg --to 16:9` | 图像扩展 / 扩图 | `--to` 或 `--left/--top` | PNG |
 | `pwish bg ./p.jpg --prompt "..."` | AI 换背景（内部先抠图） | `--prompt` | 1-4 张 JPG 候选 |
 | `pwish dewatermark ./p.jpg` | 自动去水印 | — | JPG |
 | `pwish erase ./p.jpg --mask ./m.png` | 去杂物 / 擦除 | `--mask` 蒙版图 | PNG；`--strength 1-5` 默认 3 |
@@ -140,6 +141,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **`erase` 的蒙版**：白色（或任意非透明）区域 = 要擦掉的区域，尺寸应与原图一致。
   用户没有蒙版图时，请让他用任意画图工具涂一块再导出，别自称能自动识别。
 - **组合流水线**：老照片修复常见顺序 `restore` → `colorize` → `dewatermark`，每步单独下载。
+- **扩图**：`--to 16:9` 会按原图尺寸自动算左右外扩量；只想手动控制就用
+  `--left/--right/--top/--bottom`（0-1 的比例，0.2 表示外扩原边长的 20%）。改比例前先确认用途，
+  竖图转横图方向搞反会得到“被压扁”的构图。
 - **额度和生图分开**：这些工具走各自的每日免费次数，不受生图模型算粒影响；`quota` 里看不到明细，
   失败时报 `CREDIT_NOT_ENOUGH` 就是当日次数用完了。
 - 输出文件默认落在 `out/`，命名 `<原文件名>-<工具名>-<时间戳>`；`--no-download` 只打印 URL。
