@@ -59,7 +59,7 @@ export function resolveToken(cfg) {
   const token = (cfg?.token || "").trim();
   if (!token) {
     throw new UserError(
-      "尚未登录。先执行 `pwish login`（会自动读取已登录浏览器），或设置环境变量 PWISH_TOKEN。",
+      "尚未登录。先执行 `pwish login`，或设置环境变量 PWISH_TOKEN。",
       "NO_TOKEN",
     );
   }
