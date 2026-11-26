@@ -1,6 +1,6 @@
 ---
 name: pwish
-description: 用 `pwish` 命令行工具调用佐糖（picwish.cn）的图片能力：一句话生图、电商套图、电商详情图、抠图去背景、变清晰、高清修复、AI 换背景、去水印、去杂物、黑白上色、格式转换，并把结果下载到本地。当用户要生成商品图/电商图/白底图/场景图/模特图/套图/详情图，或要抠图、去背景、换背景、去水印、修图、放大清晰化、给老照片上色、改图片格式，以及提到佐糖/picwish/AI 设计师时使用。
+description: 用 `pwish` 命令行工具调用佐糖（picwish.cn）的图片能力：一句话生图、电商套图、电商详情图、抠图去背景、变清晰、高清修复、图像扩展、图片翻译、AI 换背景、去水印、去杂物、黑白上色、格式转换，并把结果下载到本地。当用户要生成商品图/电商图/白底图/场景图/模特图/套图/详情图，或要抠图、去背景、换背景、去水印、修图、放大清晰化、给老照片上色、改图片格式，以及提到佐糖/picwish/AI 设计师时使用。
 ---
 
 # 佐糖 AI 设计师（pwish CLI）
@@ -129,6 +129,7 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 | `pwish upscale ./p.jpg` | 变清晰 / 放大 | — | JPG；`--type photo\|general\|text`，`--scale 2` |
 | `pwish restore ./p.jpg` | 高清修复（模糊、低清、老照片） | — | JPG |
 | `pwish expand ./p.jpg --to 16:9` | 图像扩展 / 扩图 | `--to` 或 `--left/--top` | PNG |
+| `pwish translate ./p.jpg --to ENG` | 图片翻译（换字保版式） | `--from/--to` 语言码 | JPG |
 | `pwish bg ./p.jpg --prompt "..."` | AI 换背景（内部先抠图） | `--prompt` | 1-4 张 JPG 候选 |
 | `pwish dewatermark ./p.jpg` | 自动去水印 | — | JPG |
 | `pwish erase ./p.jpg --mask ./m.png` | 去杂物 / 擦除 | `--mask` 蒙版图 | PNG；`--strength 1-5` 默认 3 |
@@ -144,6 +145,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **扩图**：`--to 16:9` 会按原图尺寸自动算左右外扩量；只想手动控制就用
   `--left/--right/--top/--bottom`（0-1 的比例，0.2 表示外扩原边长的 20%）。改比例前先确认用途，
   竖图转横图方向搞反会得到“被压扁”的构图。
+- **图片翻译**：默认中译英（`--from CHS --to ENG`），语言码用三字母大写（CHS/CHT/ENG/JPN/KOR/FRA/DEU/
+  ESP/POR/PTB/ROM/RUS/VIN/ARA/THA）。译文替换画面文字、保留原有版式，适合把国内详情图换语种重投。
+  源语言写 `auto` 服务端会直接返回 `task failed`（实测），所以要按图片实际语种传 `CHS` 等具体语言码。
 - **额度和生图分开**：这些工具走各自的每日免费次数，不受生图模型算粒影响；`quota` 里看不到明细，
   失败时报 `CREDIT_NOT_ENOUGH` 就是当日次数用完了。
 - 输出文件默认落在 `out/`，命名 `<原文件名>-<工具名>-<时间戳>`；`--no-download` 只打印 URL。

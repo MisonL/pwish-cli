@@ -33,7 +33,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
-| **图片工具** | 抠图、变清晰、高清修复、图像扩展、AI 换背景、去水印、去杂物、上色、格式转换 |
+| **图片工具** | 抠图、变清晰、高清修复、图像扩展、图片翻译、AI 换背景、去水印、去杂物、上色、格式转换 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
@@ -164,8 +164,8 @@ pwish login
 CLI 对会员、算粒、免费额度的处理是「先看再跑、跑完回读」：
 
 - `pwish quota` 一次看全：账号身份（免费 / 会员 + 到期 + 算粒）、各生图模型免费次数、
-  设计任务（套图 / 详情图 / AI 图片编辑）、图片工具（抠图 / 变清晰 / 高清修复 / 换背景 /
-  去水印 / 去杂物 / 上色 / 格式转换）。有「今日已用」计数的项目会一并显示。
+  设计任务（套图 / 详情图 / AI 图片编辑）、图片工具（抠图 / 变清晰 / 高清修复 / 图像扩展 /
+  图片翻译 / 换背景 / 去水印 / 去杂物 / 上色 / 格式转换）。有「今日已用」计数的项目会一并显示。
 - **生成前预检**：`gen` / `suite` / 各图片工具在提交前查一次额度。目标额度为 0 时直接拦下并给出可选项，
   例如 `模型 gemini-3：免费次数已用完，可换用还有额度的模型：jimeng-5-flash(3)、gemini-3.1(1)`。
 - **跑完回读**：任务结束会打印一行 `额度：抠图 免费剩余 10 次`，方便连续批量时判断还要不要继续。
@@ -192,6 +192,7 @@ pwish cutout ./photo.jpg              # 抠图 → 透明底 PNG
 pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
 pwish restore ./photo.jpg             # 高清修复（模糊 / 低清 / 老照片）
 pwish expand ./photo.jpg --to 16:9    # 图像扩展：自动算四边外扩量
+pwish translate ./poster.jpg --to ENG # 图片翻译：保留版式替换文字
 pwish bg ./product.jpg --prompt "白色大理石台面"
 pwish dewatermark ./photo.jpg
 pwish erase ./photo.jpg --mask ./mask.png [--strength 3]
@@ -228,6 +229,10 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 
 # 竖图改成 16:9 横版（电商主图 / 详情页头图）
 pwish expand ./mug.jpg --to 16:9 -o out/wide
+
+# 中文海报换成英文版（文字替换，版式保留）
+pwish translate ./poster.jpg --from CHS --to ENG -o out/en
+# 注意：--from auto 服务端不支持（会 task failed），要按实际语种传 CHS / ENG 等
 
 # 商品图：抠透明底 → 换场景背景
 pwish cutout ./mug.jpg -o out/cut
@@ -284,6 +289,7 @@ pwish dewatermark ./old.jpg -o out/fix
 | 变清晰 | `POST tasks/login/scale` → `GET tasks/login/scale/{task_id}` |
 | 高清修复 | `POST tasks/login/scale-pro` → `GET tasks/login/scale-pro/{task_id}` |
 | 图像扩展 | `POST tasks/login/self-image-expand` → `GET tasks/login/self-image-expand/{task_id}` |
+| 图片翻译 | `POST tasks/login/external/image-translate` → `GET tasks/login/external/image-translate/{task_id}` |
 | AI 换背景 | `POST tasks/login/background` → `GET tasks/login/background/{task_id}` |
 | 去水印 | `POST tasks/login/auto-watermark-image` → `GET tasks/login/auto-watermark-image/{task_id}` |
 | 去杂物 | `POST tasks/login/object-refine` → `GET tasks/login/object-refine/{task_id}` |

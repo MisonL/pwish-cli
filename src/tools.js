@@ -135,6 +135,38 @@ export async function expandImage(client, { file, to, left, right, top, bottom, 
   return { taskId, data, resourceId: up.resourceId };
 }
 
+/** 图片翻译。语言码沿用站点翻译服务（NLLM 码表），源语言传 "auto" 交给服务端识别。 */
+const TRANSLATE_LANGS = ["auto", "CHS", "CHT", "ENG", "JPN", "KOR", "FRA", "DEU", "ESP", "POR", "PTB", "ROM", "RUS", "VIN", "ARA", "THA"];
+
+/** 图片翻译：上传 → 建任务 → 轮询，结果在 data.images[].image。 */
+export async function translateImage(client, { file, from = "CHS", to = "ENG", timeoutMs = 600_000 } = {}) {
+  const norm = (v) => {
+    const upper = String(v).toUpperCase();
+    return upper === "AUTO" ? "auto" : upper;
+  };
+  const source = norm(from);
+  const target = norm(to);
+  for (const [value, label] of [[source, "--from"], [target, "--to"]]) {
+    if (!TRANSLATE_LANGS.includes(value)) {
+      throw new Error(`不支持的${label}语言：${value}（可用：${TRANSLATE_LANGS.join(" / ")}）`);
+    }
+  }
+  if (source === target) throw new Error("源语言与目标语言相同，翻译没有意义");
+
+  const up = await uploadFile(client, file, "pub/tasks/input/image_translate");
+  const body = {
+    img_trans_key: "aliyun",
+    source_language: source,
+    target_language: target,
+    task_type: 349,
+    quality: "2k",
+    source_resource_ids: [up.resourceId],
+  };
+  const taskId = await create(client, "tasks/login/external/image-translate", body, "图片翻译");
+  const data = await poll(client, "tasks/login/external/image-translate", taskId, timeoutMs);
+  return { taskId, data, resourceId: up.resourceId };
+}
+
 /** 高清修复（老照片 / 模糊低清图的超分修复）。 */
 export function restorePhoto(client, { file, type = 0, timeoutMs = 300_000 } = {}) {
   return run(client, {

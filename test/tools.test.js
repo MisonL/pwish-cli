@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { convertFormat, expansionForTarget, resultUrls } from "../src/tools.js";
+import { convertFormat, expansionForTarget, resultUrls, translateImage } from "../src/tools.js";
 
 test("resultUrls 只取正式结果，忽略预览图与蒙版", () => {
   const data = {
@@ -94,4 +94,14 @@ test("expansionForTarget 已是目标比例时四边为 0", () => {
 
 test("expansionForTarget 拒绝未知画幅", () => {
   assert.throws(() => expansionForTarget({ width: 10, height: 10, to: "21:9" }), /不支持的目标画幅/);
+});
+
+test("translateImage 拒绝不支持的语言（不发起网络请求）", async () => {
+  const client = { request: () => assert.fail("不应发起请求") };
+  await assert.rejects(() => translateImage(client, { file: "x.png", to: "XXX" }), /不支持的目标语言|不支持的--to语言/);
+});
+
+test("translateImage 拒绝源语言与目标语言相同", async () => {
+  const client = { request: () => assert.fail("不应发起请求") };
+  await assert.rejects(() => translateImage(client, { file: "x.png", from: "ENG", to: "ENG" }), /相同/);
 });

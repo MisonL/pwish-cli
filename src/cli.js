@@ -12,6 +12,7 @@ import {
   removeObject,
   restorePhoto,
   expandImage,
+  translateImage,
   colorize,
   convertFormat,
   resultUrls,
@@ -196,6 +197,7 @@ const TOOL_ROWS = [
   ["变清晰", "upscale"],
   ["高清修复", "restore"],
   ["图像扩展", "expand"],
+  ["图片翻译", "translate"],
   ["换背景", "bg"],
   ["去水印", "dewatermark"],
   ["去杂物", "erase"],
@@ -353,6 +355,7 @@ const TOOLS = {
   erase: { label: "去杂物", run: removeObject, ext: ".png" },
   restore: { label: "高清修复", run: restorePhoto, ext: ".jpg" },
   expand: { label: "图像扩展", run: expandImage, ext: ".png" },
+  translate: { label: "图片翻译", run: translateImage, ext: ".jpg" },
   colorize: { label: "黑白上色", run: colorize, ext: ".png" },
   convert: { label: "格式转换", run: convertFormat, ext: "" },
 };
@@ -389,6 +392,10 @@ async function cmdTool(name, args) {
     if (!fs.existsSync(mask)) throw new UserError(`蒙版文件不存在：${mask}`, "NO_FILE");
     opts.mask = mask;
     if (args.flags.strength) opts.strength = Number(args.flags.strength);
+  }
+  if (name === "translate") {
+    opts.from = String(args.flags.from || "CHS");
+    opts.to = String(args.flags.to || "ENG");
   }
   if (name === "convert") {
     opts.format = String(args.flags.format || args.flags.f || "png").toLowerCase();
@@ -903,6 +910,7 @@ ${cyan}图片工具（一图一任务，直接出图）
   pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]   变清晰/放大
   pwish restore ./photo.jpg                       高清修复（模糊、低清、老照片）
   pwish expand ./photo.jpg --to 16:9              图像扩展/扩图（也可 --left 0.2 --top 0.1）
+  pwish translate ./poster.jpg --to ENG           图片翻译（默认中→英，--from 指定源语言）
   pwish bg ./product.jpg --prompt "白色大理石台面"  AI 换背景（自动先抠图）
   pwish dewatermark ./photo.jpg                   自动去水印
   pwish erase ./photo.jpg --mask ./mask.png [--strength 3]  去杂物/擦除
@@ -961,6 +969,7 @@ export async function main(argv) {
     case "erase":
     case "restore":
     case "expand":
+    case "translate":
     case "colorize":
     case "convert":
       return cmdTool(cmd, args);

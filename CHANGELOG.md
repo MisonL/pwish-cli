@@ -5,6 +5,22 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-26
+
+### Added
+
+- **`pwish translate` 图片翻译**：把画面文字换成目标语言、保留原有版式，已实测
+  （中文截图 → 英文，`images[].image` 取图；两次任务分别消耗 1 次额度）
+  - `--from/--to` 用站点语言码（CHS/CHT/ENG/JPN/KOR/FRA/DEU/ESP/POR/PTB/ROM/RUS/VIN/ARA/THA）
+  - 接入额度预检与回读（`image_translate_num`）
+  - 语言码非法或源/目标语言相同时不发起请求
+- 补 2 条翻译参数校验测试（测试 72 → 74）
+
+### Fixed
+
+- 图片翻译的 `source_language` 传 `auto` 会被服务端判为 `task failed`（实测），
+  因此默认值定为 `CHS`，并在文档里写明要按图片实际语种传具体语言码
+
 ## [0.6.1] - 2026-11-26
 
 审查与清理（无功能变化）：

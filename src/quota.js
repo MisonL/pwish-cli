@@ -43,6 +43,7 @@ const TOOL_FIELDS = {
   dewatermark: { remain: "watermark_image_free_num" },
   erase: { remain: "object_refine_num" },
   colorize: { remain: "colorization_general_gift" },
+  translate: { remain: "image_translate_num" },
   convert: { remain: "document_conversion_num" },
 };
 
