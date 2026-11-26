@@ -36,6 +36,7 @@ import {
   verifyToken,
 } from "./tasks.js";
 import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
+import { DETAIL_SCENES, planDetailPrompts, generateDetail, detailImagesOf } from "./detail.js";
 import { summarizeQuota, preflight, hasCredits, toolRemainOf, modelRemain } from "./quota.js";
 
 /* -------------------------------- commands -------------------------------- */
@@ -637,6 +638,113 @@ async function cmdSuite(args) {
   return 0;
 }
 
+async function cmdDetail(args) {
+  const images = [].concat(args.flags.image || args.flags.i || []);
+  if (!images.length) throw new UserError('详情图需要至少 1 张商品图：pwish detail -i ./product.jpg --selling "产品名 + 卖点"');
+  const selling = args.flags.selling || args._[1] || "";
+  if (!selling) throw new UserError('详情图需要卖点（AI 要据此写每个模块的文案）：--selling "简约保温杯 500ml，24h 保温"', "NO_SELLING");
+  const site = (args.flags.site || "amazon").toLowerCase();
+  if (!SUITE_SITES[site]) throw new UserError(`未知站点 ${site}，可用：${Object.keys(SUITE_SITES).join(", ")}`);
+
+  const requested = (args.flags.scenes || "poster,highlights,feature,detail")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const unknown = requested.filter((x) => !DETAIL_SCENES[x]);
+  if (unknown.length) {
+    throw new UserError(
+      `未知详情图场景 ${unknown.join(", ")}。可用：${Object.entries(DETAIL_SCENES).map(([k, v]) => `${k}(${v})`).join(", ")}`,
+    );
+  }
+
+  const model = resolveModel(args.flags.model || args.flags.m || "gemini-3");
+  const sizeName = (args.flags.size || args.flags.s || "2K").toUpperCase();
+  const ratio = args.flags.ratio || args.flags.r || "1:1";
+  const pattern = (args.flags.mode || "economy").toLowerCase();
+  const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
+  const timeoutMs = Number(args.flags.timeout || 900) * 1000;
+  const client = clientFromConfig(args.flags);
+
+  await checkQuota(client, { kind: "design", key: "detail", label: "详情图：", force: Boolean(args.flags.force) });
+
+  log(`${dim}上传 ${images.length} 张商品图…`);
+  const uploaded = await uploadFiles(client, images);
+  const resourceIds = uploaded.map((u) => u.resourceId);
+
+  log(`${dim}AI 正在按场景写详情图文案与提示词…`);
+  const plan = await planDetailPrompts(client, {
+    resourceIds,
+    sellingPoints: selling,
+    scenes: requested,
+    site,
+    country: args.flags.country,
+    lang: args.flags.lang,
+    size: ratio,
+    timeoutMs,
+  });
+  const prompts = plan.prompts || {};
+  const plannedScenes = requested.filter((x) => prompts[x]);
+  if (!plannedScenes.length) {
+    throw new ApiError("AI 未返回任何场景提示词，无法出图", { code: "NO_PROMPT", payload: plan.raw });
+  }
+  log(`${dim}已生成 ${plannedScenes.length} 个场景的提示词`);
+
+  log(`${dim}开始出图（${plannedScenes.join(", ")} · ${model.key} · ${sizeName}）…`);
+  const out = await generateDetail(client, {
+    resourceIds,
+    sellingPoints: selling,
+    prompts,
+    scenes: plannedScenes,
+    site,
+    country: args.flags.country,
+    lang: args.flags.lang,
+    model: model.key,
+    sizeName,
+    ratio,
+    pattern,
+    conversationId: args.flags.conv || args.flags.conversation,
+    timeoutMs,
+    onProgress: ({ progress }) => {
+      if (progress > 0) log(`${dim}  ${progress}%`);
+    },
+  });
+
+  const byScene = detailImagesOf(out.raw);
+  const total = Object.values(byScene).reduce((n, list) => n + list.length, 0);
+  if (!total) throw new ApiError("详情图任务完成但没有返回图片", { code: "GENERATION_FAILED", payload: out.raw });
+
+  const downloaded = [];
+  if (!args.flags["no-download"]) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    for (const [scene, imgs] of Object.entries(byScene)) {
+      for (const [i, img] of imgs.entries()) {
+        const base = `${stamp}-detail-${scene}${imgs.length > 1 ? `-${i + 1}` : ""}`;
+        const saved = await downloadImage(img.url, outDir, base, ".png");
+        downloaded.push({ scene, ...saved });
+      }
+    }
+  }
+
+  if (args.flags.json) {
+    json({
+      ok: true,
+      conversationId: out.conversationId,
+      model: model.key,
+      site,
+      scenes: byScene,
+      files: downloaded.map((d) => ({ scene: d.scene, file: d.file })),
+      prompts,
+      sellingPoints: selling,
+    });
+    return 0;
+  }
+
+  say(`${green}✓ 详情图完成 ${total} 张  会话: ${out.conversationId}`);
+  for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
+  await quotaAfterRun(client, { kind: "design", key: "detail", label: "详情图" });
+  return 0;
+}
+
 async function cmdTask(args) {
   const ids = args._.slice(1);
   if (!ids.length) throw new UserError("用法：pwish task <task_id> [...]");
@@ -766,6 +874,11 @@ ${cyan}电商套图（商品图 → 多场景成套图）
   pwish suite -i ./product.jpg [--selling "产品名+卖点"] [--site amazon] [--scenes main,core,selling,material,person]
   可选：-m 模型 --size 2K --ratio 1:1 -o 输出目录
 
+${cyan}电商详情图（商品图 → 详情页模块图）
+  pwish detail -i ./product.jpg --selling "产品名+卖点" [--scenes poster,highlight,feature,detail]
+  场景：poster(海报) highlights(亮点) feature(卖点) detail(细节) lifestyle(生活) scenes(多场景) dimensions(尺寸)
+  可选：-m 模型 --size --ratio -m --mode -o 输出目录
+
 ${cyan}图片工具（一图一任务，直接出图）
   pwish cutout ./photo.jpg                        抠图去背景 → 透明底 PNG
   pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]   变清晰/放大
@@ -836,6 +949,9 @@ export async function main(argv) {
     case "suite":
     case "taotu":
       return cmdSuite(args);
+    case "detail":
+    case "xiangqing":
+      return cmdDetail(args);
     case "task":
       return cmdTask(args);
     case "history":

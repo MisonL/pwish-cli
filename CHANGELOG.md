@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- **`pwish detail` 电商详情图**：商品图 + 卖点 → 详情页模块图，已对线上接口实测（一次任务产出 3 张）
+  - 场景：`poster` 海报、`highlights` 亮点合集、`feature` 卖点、`detail` 细节、
+    `lifestyle` 场景生活、`scenes` 多场景、`dimensions` 尺寸标注
+  - 两段式流程：先用 `tasks/login/suite/prompt`（`from=detail-custom-prompt`）按场景写带排版描述的提示词，
+    再用 `tasks/login/suite`（`from=design-detail`）出图，结果按场景命名下载
+  - 接入配额预检与跑后额度回读（「详情图」独立额度池）
+- 场景推荐接口 `tasks/login/suite/recommend` 打通，用于确认详情图可用场景
+
+### Changed
+
+- README / SKILL.md 增补详情图命令、场景表、额度口径与「先试 2-3 个场景」的用量建议
+- 已知限制中移除「详情图未实现」，仅保留视频（账号无视频额度，未实测）
+
 ## [0.3.2] - 2026-11-26
 
 ### Fixed

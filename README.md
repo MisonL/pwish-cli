@@ -32,6 +32,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **本机登录页** | 微信扫码 / 手机号邮箱密码，视觉与官网一致，凭据不落盘 |
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
+| **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
 | **图片工具** | 抠图、变清晰、高清修复、AI 换背景、去水印、去杂物、上色、格式转换 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
@@ -185,6 +186,7 @@ pwish models                          # 模型 / 比例 / 清晰度表
 
 pwish gen "提示词" -i 参考图 [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 目录]
 pwish suite -i 商品图 [--selling "卖点"] [--site amazon] [--scenes main,core,selling,material,person]
+pwish detail -i 商品图 --selling "卖点" [--scenes poster,highlights,feature,detail]
 
 pwish cutout ./photo.jpg              # 抠图 → 透明底 PNG
 pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
@@ -215,6 +217,10 @@ pwish gen "纯白色背景，商品居中占画面85%，柔和影棚光，高细
 # 电商套图：亚马逊，5 个可用场景里的 3 个
 pwish suite -i ./mug.jpg --selling "简约白瓷马克杯 350ml，可微波加热" \
   --site amazon --scenes main,selling,material
+
+# 电商详情图：海报 + 卖点 + 细节 三个模块
+pwish detail -i ./mug.jpg --selling "简约白瓷马克杯 350ml，可微波加热" \
+  --site amazon --scenes poster,feature,detail -o out/detail
 
 # 一次出 3 张备选
 pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
@@ -267,6 +273,9 @@ pwish dewatermark ./old.jpg -o out/fix
 | 会话列表/详情 | `GET image/conversations`、`GET image/conversations/{id}` |
 | 套图：AI 写提示词 | `POST tasks/login/suite/prompt` → `GET tasks/login/suite/prompt/{task_id}` |
 | 套图：出图 | `POST tasks/login/suite` → `GET tasks/login/suite/{task_id}` |
+| 套图：推荐场景 | `POST tasks/login/suite/recommend` → `GET tasks/login/suite/recommend/{task_id}` |
+| 详情图：写提示词 | `POST tasks/login/suite/prompt`（`from=detail-custom-prompt`） |
+| 详情图：出图 | `POST tasks/login/suite`（`from=design-detail`，结果按场景放在 `items`） |
 | 抠图 | `POST tasks/login/segmentation` → `GET tasks/login/segmentation/{task_id}` |
 | 变清晰 | `POST tasks/login/scale` → `GET tasks/login/scale/{task_id}` |
 | 高清修复 | `POST tasks/login/scale-pro` → `GET tasks/login/scale-pro/{task_id}` |
@@ -292,8 +301,7 @@ pwish skill --install
 
 **能力边界**（没做 / 没验证，不要当成能用）：
 
-- **详情图（电商详情图）未实现**：站点有该功能，CLI 尚未支持，无对应命令。
-- **视频生成未实现**：接口存在（`tasks/login/video-messages`），未验证也未封装。
+- **视频生成未实现**：接口存在（`tasks/login/video-messages`），账号无视频额度，未能实测，因此没有封装。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
 - **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
 - **换背景需要提示词**：`pwish bg` 先用抠图得到透明底，再调背景生成；一次返回 1-4 张候选。
