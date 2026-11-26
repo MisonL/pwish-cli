@@ -1,7 +1,7 @@
 import { UserError, loadConfig, resolveToken } from "./config.js";
 
 /** Error codes returned by the backend, mapped to stable CLI error names. */
-export const API_ERRORS = {
+const API_ERRORS = {
   15546: ["CREDIT_NOT_ENOUGH", "算粒不足（用 `pwish quota` 看余额；可换便宜模型或升级会员）"],
   15030: ["DAILY_LIMIT_EXCEEDED", "今日免费额度已用完（次日重置；可换模型或升级会员）"],
   15022: ["SENSITIVE_IMAGE", "参考图被判定为敏感图片"],

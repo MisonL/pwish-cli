@@ -19,7 +19,7 @@ import { loginWithPassword, requestWechatQr, pollWechatQr, LoginError } from "./
  */
 
 export const CODE_TTL_MS = 60_000;
-export const TOKEN_PATTERN = /^v2,\d+,\d+,[0-9a-fA-F]{16,}$/;
+const TOKEN_PATTERN = /^v2,\d+,\d+,[0-9a-fA-F]{16,}$/;
 
 export function base64url(buf) {
   return Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -252,10 +252,11 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
       sendHtml(404, renderErrorPage("未知路径"));
     } catch (err) {
       // /api/* 必须回 JSON，否则前端解析 HTML 失败，用户只会看到「无法连接本机服务」
+      const friendly = { BODY_TOO_LARGE: "请求体过大", BAD_JSON: "请求格式不正确" }[err.message] || err.message;
       if (url.pathname.startsWith("/api/")) {
-        sendJson(500, { message: `服务异常：${err.message}` });
+        sendJson(500, { message: `服务异常：${friendly}` });
       } else {
-        sendHtml(500, renderErrorPage(`服务异常：${escapeHtml(err.message)}`));
+        sendHtml(500, renderErrorPage(`服务异常：${escapeHtml(friendly)}`));
       }
     }
   });

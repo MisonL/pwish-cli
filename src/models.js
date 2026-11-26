@@ -24,7 +24,7 @@ export const MODELS = {
   google: { id: 5, family: "nano", label: "Google 原生生图", credits: "按张计费" },
 };
 
-export const MODEL_ALIASES = {
+const MODEL_ALIASES = {
   "电商模型3.0": "gemini-3",
   "电商模型3": "gemini-3",
   "gemini3": "gemini-3",
@@ -39,7 +39,7 @@ export const MODEL_ALIASES = {
   "jimeng": "jimeng-4.5",
 };
 
-export const DEFAULT_MODEL = "gemini-3";
+const DEFAULT_MODEL = "gemini-3";
 
 export function resolveModel(name) {
   if (!name) return { key: DEFAULT_MODEL, ...MODELS[DEFAULT_MODEL] };
@@ -55,7 +55,7 @@ export function resolveModel(name) {
 export const SIZE_TO_QUALITY = { "1K": "standard", "2K": "high", "2K+": "super", "4k": "super", "4K": "super" };
 
 /** 尺寸表（GPT_IMAGE_2 系需要显式 dimension） */
-export const DIMENSIONS = {
+const DIMENSIONS = {
   "1:1": { standard: "1024x1024", high: "2048x2048", super: "2880x2880" },
   "2:3": { standard: "1024x1536", high: "1360x2048", super: "2336x3504" },
   "3:2": { standard: "1536x1024", high: "2048x1360", super: "3504x2336" },

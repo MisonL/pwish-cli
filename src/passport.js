@@ -9,7 +9,7 @@
 const PASSPORT_BASE = process.env.PWISH_PASSPORT_BASE || "https://gw.aoscdn.com/base/passport/v2";
 
 /** 官方网页版登录使用的微信开放平台应用 id。 */
-export const WECHAT_CLIENT_ID = "wxd6d7038d8f2449ea";
+const WECHAT_CLIENT_ID = "wxd6d7038d8f2449ea";
 
 export class LoginError extends Error {
   constructor(message, code = "LOGIN_FAILED") {

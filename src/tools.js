@@ -78,6 +78,28 @@ export function upscale(client, { file, type = 1, scaleFactor = 2, timeoutMs = 3
 const TARGET_ASPECT = { "1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4, "16:9": 16 / 9, "9:16": 9 / 16, "3:2": 3 / 2, "2:3": 2 / 3 };
 
 /**
+ * 按目标画幅算四边外扩比例（0-1，相对各自边长）。
+ * 比原图宽就往左右补，比原图高就往上下补，已是目标比例则全为 0。
+ */
+export function expansionForTarget({ width, height, to }) {
+  const target = TARGET_ASPECT[to];
+  if (!target) throw new Error(`不支持的目标画幅：${to}（可用：${Object.keys(TARGET_ASPECT).join(" / ")}）`);
+  const edges = { left: 0, right: 0, top: 0, bottom: 0 };
+  if (!width || !height) return edges;
+  const current = width / height;
+  if (target > current) {
+    const grow = (target / current - 1) / 2;
+    edges.left = grow;
+    edges.right = grow;
+  } else if (target < current) {
+    const grow = (current / target - 1) / 2;
+    edges.top = grow;
+    edges.bottom = grow;
+  }
+  return edges;
+}
+
+/**
  * 图像扩展（扩图）：按比例向四边外扩，或用 `to` 目标画幅自动计算外扩量。
  * 四边取值 0-1，表示相对原图各边长的外扩比例。
  */
@@ -85,20 +107,9 @@ export async function expandImage(client, { file, to, left, right, top, bottom, 
   const up = await uploadFile(client, file, PREFIX.general);
   const edges = { left: Number(left) || 0, right: Number(right) || 0, top: Number(top) || 0, bottom: Number(bottom) || 0 };
   if (to) {
-    const target = TARGET_ASPECT[String(to)];
-    if (!target) throw new Error(`不支持的目标画幅：${to}（可用：${Object.keys(TARGET_ASPECT).join(" / ")}）`);
     const { width, height } = up;
     if (!width || !height) throw new Error("无法读取图片尺寸，改用 --left/--right/--top/--bottom 指定外扩比例");
-    const current = width / height;
-    if (target > current) {
-      const grow = (target / current - 1) / 2;
-      edges.left = grow;
-      edges.right = grow;
-    } else if (target < current) {
-      const grow = (current / target - 1) / 2;
-      edges.top = grow;
-      edges.bottom = grow;
-    }
+    Object.assign(edges, expansionForTarget({ width, height, to: String(to) }));
   }
   if (!edges.left && !edges.right && !edges.top && !edges.bottom) {
     throw new Error("至少需要一边外扩：用 --to 16:9 或 --left 0.25 之类的比例");

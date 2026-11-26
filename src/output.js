@@ -6,7 +6,6 @@ const tty = Boolean(process.stdout.isTTY);
 export const cyan = tty ? "\u001b[36m" : "";
 export const green = tty ? "\u001b[32m" : "";
 export const yellow = tty ? "\u001b[33m" : "";
-export const red = tty ? "\u001b[31m" : "";
 export const dim = tty ? "\u001b[2m" : "";
 export const reset = tty ? "\u001b[0m" : "";
 

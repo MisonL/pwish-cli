@@ -111,7 +111,13 @@ function execPaste() {
   // 只在 --paste 时用；各平台剪贴板读取命令
   const platform = process.platform;
   if (platform === "darwin") return execFileSync("pbpaste", { encoding: "utf8" }).trim();
-  if (platform === "win32") return execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" }).trim();
+  if (platform === "win32") {
+    try {
+      return execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" }).trim();
+    } catch {
+      throw new UserError("读取剪贴板失败（需要 PowerShell）。可以改用 pwish login --token 'v2,...'", "CLIPBOARD_FAILED");
+    }
+  }
   const candidates = [
     ["xclip", ["-selection", "clipboard"]],
     ["xsel", ["--clipboard", "--output"]],
@@ -915,6 +921,7 @@ ${cyan}其他
   pwish skill --install         安装 agent skill
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
         --force 跳过额度预检（账号还有会员权益但 CLI 判为 0 时用）
+  别名：me=whoami  credits=quota  draw/create=gen  taotu=suite  xiangqing=detail  ls=history  dl=download
 
 ${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。
 `);

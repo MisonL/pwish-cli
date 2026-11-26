@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-26
+
+审查与清理（无功能变化）：
+
+### Changed
+
+- 收回 12 处内部符号的 `export`（`API_ERRORS`、`TOKEN_PATTERN`、`CONFIG_DIR`、`MODEL_ALIASES`、
+  `DEFAULT_MODEL`、`DIMENSIONS`、`WECHAT_CLIENT_ID`、`batchTasks`、`getSuiteTask`、`mimeOf` 等），
+  删除未使用的 `red` 颜色常量
+- 扩图的外扩量计算抽成纯函数 `expansionForTarget`，便于测试与复用
+- 登录页 `/api/*` 的内部错误码（`BODY_TOO_LARGE` / `BAD_JSON`）转成中文提示
+- Windows 下读取剪贴板失败时给出可执行提示，不再抛原始 ENOENT
+- 帮助信息补「别名」一行（`me / credits / draw / create / taotu / xiangqing / ls / dl`）
+
+### Added
+
+- 测试从 66 增至 72：扩图比例计算 4 条、登录错误码映射 2 条
+
 ## [0.6.0] - 2026-11-26
 
 ### Added

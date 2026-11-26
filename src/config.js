@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 const HOME = os.homedir();
-export const CONFIG_DIR = process.env.PWISH_CONFIG_DIR || path.join(HOME, ".config", "pwish");
+const CONFIG_DIR = process.env.PWISH_CONFIG_DIR || path.join(HOME, ".config", "pwish");
 export const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
 const DEFAULTS = {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { convertFormat, resultUrls } from "../src/tools.js";
+import { convertFormat, expansionForTarget, resultUrls } from "../src/tools.js";
 
 test("resultUrls 只取正式结果，忽略预览图与蒙版", () => {
   const data = {
@@ -69,4 +69,29 @@ test("resultUrls 支持扩图的 image1-4 结构，忽略原图占位", () => {
     accelerate_image1: "https://cdn.example.com/exp-1-accel.png",
   };
   assert.deepEqual(resultUrls(data), ["https://cdn.example.com/exp-1.png", "https://cdn.example.com/exp-2.png"]);
+});
+
+test("expansionForTarget 比原图宽时补左右", () => {
+  const edges = expansionForTarget({ width: 512, height: 512, to: "16:9" });
+  assert.equal(edges.top, 0);
+  assert.equal(edges.bottom, 0);
+  assert.ok(Math.abs(edges.left - (16 / 9 - 1) / 2) < 1e-9);
+  assert.equal(edges.left, edges.right);
+});
+
+test("expansionForTarget 比原图高时补上下", () => {
+  const edges = expansionForTarget({ width: 1600, height: 900, to: "9:16" });
+  assert.equal(edges.left, 0);
+  assert.equal(edges.right, 0);
+  assert.ok(edges.top > 0);
+  assert.equal(edges.top, edges.bottom);
+});
+
+test("expansionForTarget 已是目标比例时四边为 0", () => {
+  const edges = expansionForTarget({ width: 1920, height: 1080, to: "16:9" });
+  assert.deepEqual(edges, { left: 0, right: 0, top: 0, bottom: 0 });
+});
+
+test("expansionForTarget 拒绝未知画幅", () => {
+  assert.throws(() => expansionForTarget({ width: 10, height: 10, to: "21:9" }), /不支持的目标画幅/);
 });

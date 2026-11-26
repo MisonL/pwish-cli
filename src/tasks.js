@@ -43,7 +43,7 @@ export async function createImageMessage(client, payload) {
 }
 
 /** 批量查询任务：返回 { [task_id]: data } */
-export async function batchTasks(client, taskIds) {
+async function batchTasks(client, taskIds) {
   if (!taskIds.length) return {};
   const res = await client.request("tasks/login/image-messages/batch", {
     query: { task_ids: taskIds.join(",") },
@@ -119,7 +119,7 @@ export async function downloadImage(url, outDir, basename, fallbackExt = ".png")
 }
 
 /** 套图 / 详情图任务（tasks/login/suite/{id}），返回含 items 的原始 data。 */
-export async function getSuiteTask(client, taskId) {
+async function getSuiteTask(client, taskId) {
   const res = await client.request(`tasks/login/suite/${taskId}`, { timeout: 60_000 });
   return res.data;
 }

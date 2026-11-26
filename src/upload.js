@@ -13,7 +13,7 @@ const MIME = {
   ".heic": "image/heic",
 };
 
-export function mimeOf(file) {
+function mimeOf(file) {
   return MIME[path.extname(file).toLowerCase()] || "application/octet-stream";
 }
 
