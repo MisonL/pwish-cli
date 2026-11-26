@@ -118,6 +118,56 @@ export async function downloadImage(url, outDir, basename, fallbackExt = ".png")
   return { file, bytes: buf.length };
 }
 
+/** 套图 / 详情图任务（tasks/login/suite/{id}），返回含 items 的原始 data。 */
+export async function getSuiteTask(client, taskId) {
+  const res = await client.request(`tasks/login/suite/${taskId}`, { timeout: 60_000 });
+  return res.data;
+}
+
+/** 任务详情解析：先试对话式任务，再试套图/详情图，最后试会话。 */
+export async function resolveTask(client, id) {
+  try {
+    const map = await batchTasks(client, [id]);
+    const item = map[id];
+    // 批量接口对未知 id 会返回 state=15021 的占位对象，用 message_id 判断是否真实存在
+    if (item && (item.message_id || item.task_id)) return { kind: "image", item };
+  } catch {
+    /* 不是对话式任务 id，继续尝试 */
+  }
+  try {
+    const item = await getSuiteTask(client, id);
+    if (item && (item.items || item.answer)) return { kind: "suite", item };
+  } catch {
+    /* 不是套图/详情图任务 id */
+  }
+  try {
+    const conv = await getConversation(client, id);
+    if (conv) return { kind: "conversation", item: conv };
+  } catch {
+    /* 也不是会话 id */
+  }
+  return null;
+}
+
+/** 从任意一种任务结果里取出图片 URL（套图/详情图按场景平铺）。 */
+export function taskImageUrls(resolved) {
+  if (!resolved) return [];
+  const { kind, item } = resolved;
+  if (kind === "conversation") {
+    return (item.items || []).flatMap((it) => imagesOf(it).map((i) => i.url));
+  }
+  if (kind === "suite") {
+    // 套图/详情图：items 按场景分组，answer 是兜底的平铺结果
+    const items = item.items;
+    if (items && typeof items === "object" && !Array.isArray(items)) {
+      const urls = Object.values(items).flatMap((it) => imagesOf(it).map((i) => i.url));
+      if (urls.length) return urls;
+    }
+    return imagesOf(item).map((i) => i.url);
+  }
+  return imagesOf(item).map((i) => i.url);
+}
+
 export async function listConversations(client, { page = 1, perPage = 20 } = {}) {
   const res = await client.request("image/conversations", { query: { page, per_page: perPage } });
   return res.data;

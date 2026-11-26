@@ -28,12 +28,13 @@ import {
   waitForTasks,
   imagesOf,
   downloadImage,
-  batchTasks,
   listConversations,
   getConversation,
   queueStatus,
   freeCounts,
   verifyToken,
+  resolveTask,
+  taskImageUrls,
 } from "./tasks.js";
 import { planSuitePrompts, generateSuite, suiteImagesOf } from "./suite.js";
 import { DETAIL_SCENES, planDetailPrompts, generateDetail, detailImagesOf } from "./detail.js";
@@ -749,28 +750,37 @@ async function cmdTask(args) {
   const ids = args._.slice(1);
   if (!ids.length) throw new UserError("用法：pwish task <task_id> [...]");
   const client = clientFromConfig(args.flags);
-  const map = await batchTasks(client, ids);
-  const out = ids.map((id) => {
-    const item = map[id];
-    if (!item) return { taskId: id, found: false };
-    return {
+  const out = [];
+  for (const id of ids) {
+    const resolved = await resolveTask(client, id);
+    if (!resolved) {
+      out.push({ taskId: id, found: false });
+      continue;
+    }
+    const item = resolved.item;
+    out.push({
       taskId: id,
+      kind: resolved.kind,
       found: true,
       state: item.state ?? item.status,
       progress: item.progress,
       model: item.model_type,
       error: item.error || "",
-      images: imagesOf(item).map((i) => i.url),
+      images: taskImageUrls(resolved),
       conversationId: item.conversation_id,
-    };
-  });
+    });
+  }
   if (args.flags.json) return json(out), 0;
   for (const r of out) {
     if (!r.found) {
       say(`${yellow}${r.taskId} 未找到`);
       continue;
     }
-    say(`${r.taskId}  state=${r.state} progress=${r.progress}%  ${r.error || ""}`);
+    if (r.kind === "conversation") {
+      say(`${r.taskId}  会话 · ${r.images.length} 张图`);
+    } else {
+      say(`${r.taskId}  state=${r.state} progress=${r.progress}%  ${r.error || ""}`);
+    }
     for (const u of r.images) say(`  ${u}`);
   }
   return 0;
@@ -816,14 +826,8 @@ async function cmdDownload(args) {
   if (!id) throw new UserError("用法：pwish download <task_id|conversation_id> [-o dir]");
   const client = clientFromConfig(args.flags);
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
-  let urls = [];
-
-  const map = await batchTasks(client, [id]).catch(() => ({}));
-  if (map[id]) urls = imagesOf(map[id]).map((i) => i.url);
-  if (!urls.length) {
-    const conv = await getConversation(client, id);
-    urls = (conv?.items || []).flatMap((item) => imagesOf(item).map((i) => i.url));
-  }
+  const resolved = await resolveTask(client, id);
+  const urls = taskImageUrls(resolved);
   if (!urls.length) throw new UserError(`没有找到任务或会话 ${id} 的图片`, "NOT_FOUND");
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);

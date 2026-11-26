@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-26
+
+### Added
+
+- `resolveTask`：`pwish task` / `pwish download` 自动识别任务来源——对话式任务（`image-messages`）、
+  套图 / 详情图任务（`tasks/login/suite`）、会话 id（`image/conversations`），三种 id 都能直接查与重下
+- `test/resolve-task.test.js`：覆盖未知 id 占位对象、对话式、套图、会话回退四条路径
+
+### Fixed
+
+- 套图 / 详情图任务此前查不到（误用对话式批量接口，返回 `15027 not found`）
+- 批量接口对任意未知 id 都会返回 `state=15021` 的占位对象，导致 `pwish task` 把无效 id 误报成「已过期」；
+  现在按 `message_id`/`task_id` 是否为空判定，无效 id 正常显示「未找到」
+- `pwish download <conversation_id>` 不再被占位对象截胡
+
 ## [0.4.1] - 2026-11-26
 
 ### Fixed

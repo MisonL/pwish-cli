@@ -199,8 +199,8 @@ pwish convert ./photo.png --format jpg|png|webp|bmp|gif
 
 pwish history [--limit 20]
 pwish show <conversation_id>
-pwish task <task_id> [...]
-pwish download <task_id|conversation_id> [-o 目录]
+pwish task <id> [...]                    # 对话任务 / 套图 / 详情图 / 会话 id 都能查
+pwish download <id> [-o 目录]           # 同上，三种 id 都可重新下载
 pwish queue
 ```
 
