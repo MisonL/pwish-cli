@@ -5,6 +5,7 @@ const VALUE_FLAGS = new Set([
   "model", "m", "ratio", "r", "size", "s", "mode", "format", "f", "n", "out", "o",
   "image", "i", "conv", "conversation", "timeout", "poll", "token", "selling", "site",
   "country", "lang", "scenes", "prompt-file", "limit", "page", "port", "dir",
+  "prompt", "p", "mask", "strength", "scale", "type",
 ]);
 
 /** 纯开关（不需要值）。 */
@@ -21,6 +22,7 @@ const ALIASES = {
   f: "format",
   o: "out",
   i: "image",
+  p: "prompt",
 };
 
 function canonical(key) {

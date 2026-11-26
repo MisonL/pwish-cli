@@ -65,3 +65,26 @@ test("CLI skill --install 复制内置 skill 到指定目录", async () => {
   assert.match(installed, /^---\nname: pwish/m);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("图片工具相关 flag 解析正确", () => {
+  const a = parseArgs(["bg", "./p.jpg", "--prompt", "白色台面"]);
+  assert.equal(a.flags.prompt, "白色台面");
+  const b = parseArgs(["bg", "./p.jpg", "-p", "纯色背景"]);
+  assert.equal(b.flags.prompt, "纯色背景");
+  const c = parseArgs(["erase", "./p.jpg", "--mask", "./m.png", "--strength", "5"]);
+  assert.equal(c.flags.mask, "./m.png");
+  assert.equal(c.flags.strength, "5");
+  const d = parseArgs(["upscale", "./p.jpg", "--type", "text", "--scale", "4"]);
+  assert.equal(d.flags.type, "text");
+  assert.equal(d.flags.scale, "4");
+});
+
+test("CLI 图片工具缺少必填参数时给出明确提示", () => {
+  const bin = fileURLToPath(new URL("../bin/pwish.js", import.meta.url));
+  const bg = spawnSync(process.execPath, [bin, "bg", "/tmp/pw-test.png"], { encoding: "utf8" });
+  assert.notEqual(bg.status, 0);
+  assert.match(bg.stdout + bg.stderr, /--prompt/);
+  const erase = spawnSync(process.execPath, [bin, "erase", "/tmp/pw-test.png"], { encoding: "utf8" });
+  assert.notEqual(erase.status, 0);
+  assert.match(erase.stdout + erase.stderr, /--mask/);
+});

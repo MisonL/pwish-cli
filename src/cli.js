@@ -4,6 +4,17 @@ import os from "node:os";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { parseArgs, readStdin } from "./args.js";
+import {
+  removeBackground,
+  upscale,
+  changeBackground,
+  removeWatermark,
+  removeObject,
+  restorePhoto,
+  colorize,
+  convertFormat,
+  resultUrls,
+} from "./tools.js";
 import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
@@ -202,6 +213,77 @@ function cmdSkill(args) {
   say(`  pwish skill --install --dir DIR 安装到指定目录`);
   say(`  pwish skill --showpath           打印内置 skill 路径`);
   say(`  pwish skill --print             直接输出 SKILL.md 内容`);
+  return 0;
+}
+
+const TOOLS = {
+  cutout: { label: "抠图去背景", run: removeBackground, ext: ".png" },
+  upscale: { label: "变清晰", run: upscale, ext: ".jpg" },
+  bg: { label: "AI 换背景", run: changeBackground, ext: ".jpg" },
+  dewatermark: { label: "去水印", run: removeWatermark, ext: ".png" },
+  erase: { label: "去杂物", run: removeObject, ext: ".png" },
+  restore: { label: "高清修复", run: restorePhoto, ext: ".jpg" },
+  colorize: { label: "黑白上色", run: colorize, ext: ".png" },
+  convert: { label: "格式转换", run: convertFormat, ext: "" },
+};
+
+async function cmdTool(name, args) {
+  const tool = TOOLS[name];
+  if (!tool) throw new UserError(`未知工具：${name}`, "UNKNOWN_TOOL");
+
+  let image = args.flags.image || args.flags.i || args._[1] || "";
+  if (!image) throw new UserError(`缺少输入图片。用法：pwish ${name} ./photo.jpg`, "NO_INPUT");
+  if (!fs.existsSync(image)) throw new UserError(`文件不存在：${image}`, "NO_FILE");
+
+  const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
+  const opts = { file: image, timeoutMs: Number(args.flags.timeout || 600) * 1000 };
+  if (name === "upscale") {
+    const t = String(args.flags.type || "").toLowerCase();
+    opts.type = t === "photo" ? 0 : t === "text" ? 2 : 1;
+    if (args.flags.scale) opts.scaleFactor = Number(args.flags.scale);
+  }
+  if (name === "restore" && args.flags.type) opts.type = Number(args.flags.type);
+  if (name === "bg") {
+    opts.prompt = String(args.flags.prompt || args.flags.p || "").trim();
+    if (!opts.prompt) throw new UserError('缺少背景描述。用法：pwish bg ./product.jpg --prompt "纯白影棚背景"', "NO_PROMPT");
+  }
+  if (name === "erase") {
+    const mask = args.flags.mask || "";
+    if (!mask) throw new UserError("去杂物需要蒙版图。用法：pwish erase ./photo.jpg --mask ./mask.png", "NO_MASK");
+    if (!fs.existsSync(mask)) throw new UserError(`蒙版文件不存在：${mask}`, "NO_FILE");
+    opts.mask = mask;
+    if (args.flags.strength) opts.strength = Number(args.flags.strength);
+  }
+  if (name === "convert") {
+    opts.format = String(args.flags.format || args.flags.f || "png").toLowerCase();
+  }
+
+  const client = clientFromConfig(args.flags);
+
+  log(`${dim}${tool.label}：${path.basename(image)}`);
+  const { taskId, data } = await tool.run(client, opts);
+  const urls = resultUrls(data);
+  if (!urls.length) {
+    throw new ApiError(`${tool.label}未返回图片`, { code: "NO_RESULT", payload: data });
+  }
+
+  const saved = [];
+  if (!args.flags["no-download"]) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    for (const [i, url] of urls.entries()) {
+      const ext = tool.ext || `.${opts.format || "png"}`;
+      const base = `${path.basename(image, path.extname(image))}-${name}${urls.length > 1 ? `-${i + 1}` : ""}-${stamp}`;
+      saved.push(await downloadImage(url, outDir, base, ext));
+    }
+  }
+
+  if (args.flags.json) {
+    json({ tool: name, taskId, images: urls, files: saved.map((d) => d.file) });
+    return 0;
+  }
+  say(`${green}✓ ${tool.label}完成${taskId ? `  任务: ${taskId}` : ""}`);
+  for (const d of saved) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
+  if (args.flags["no-download"]) for (const u of urls) say(`  ${u}`);
   return 0;
 }
 
@@ -541,6 +623,16 @@ ${cyan}电商套图（商品图 → 多场景成套图）
   pwish suite -i ./product.jpg [--selling "产品名+卖点"] [--site amazon] [--scenes main,core,selling,material,person]
   可选：-m 模型 --size 2K --ratio 1:1 -o 输出目录
 
+${cyan}图片工具（一图一任务，直接出图）
+  pwish cutout ./photo.jpg                        抠图去背景 → 透明底 PNG
+  pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]   变清晰/放大
+  pwish restore ./photo.jpg                       高清修复（模糊、低清、老照片）
+  pwish bg ./product.jpg --prompt "白色大理石台面"  AI 换背景（自动先抠图）
+  pwish dewatermark ./photo.jpg                   自动去水印
+  pwish erase ./photo.jpg --mask ./mask.png [--strength 3]  去杂物/擦除
+  pwish colorize ./bw-photo.jpg                   黑白照片上色
+  pwish convert ./photo.png --format jpg          格式转换（jpg/png/webp/bmp/gif）
+
 ${cyan}查询与下载
   pwish task <task_id> [...]    查询任务状态
   pwish history [--limit 20]    历史会话
@@ -584,6 +676,15 @@ export async function main(argv) {
       return cmdModels(args);
     case "skill":
       return cmdSkill(args);
+    case "cutout":
+    case "upscale":
+    case "bg":
+    case "dewatermark":
+    case "erase":
+    case "restore":
+    case "colorize":
+    case "convert":
+      return cmdTool(cmd, args);
     case "gen":
     case "draw":
     case "create":
