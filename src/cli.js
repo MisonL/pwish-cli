@@ -875,9 +875,9 @@ ${cyan}电商套图（商品图 → 多场景成套图）
   可选：-m 模型 --size 2K --ratio 1:1 -o 输出目录
 
 ${cyan}电商详情图（商品图 → 详情页模块图）
-  pwish detail -i ./product.jpg --selling "产品名+卖点" [--scenes poster,highlight,feature,detail]
+  pwish detail -i ./product.jpg --selling "产品名+卖点" [--scenes poster,highlights,feature,detail]
   场景：poster(海报) highlights(亮点) feature(卖点) detail(细节) lifestyle(生活) scenes(多场景) dimensions(尺寸)
-  可选：-m 模型 --size --ratio -m --mode -o 输出目录
+  可选：-m 模型 --size 2K --ratio 1:1 --mode economy -o 输出目录
 
 ${cyan}图片工具（一图一任务，直接出图）
   pwish cutout ./photo.jpg                        抠图去背景 → 透明底 PNG
