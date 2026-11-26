@@ -61,7 +61,7 @@ test("CLI skill --install 复制内置 skill 到指定目录", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pwish-skill-"));
   const r = spawnSync(process.execPath, [bin, "skill", "--install", "--dir", dir], { encoding: "utf8" });
   assert.equal(r.status, 0);
-  const installed = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8");
+  const installed = fs.readFileSync(path.join(dir, "pwish", "SKILL.md"), "utf8");
   assert.match(installed, /^---\nname: pwish/m);
   fs.rmSync(dir, { recursive: true, force: true });
 });

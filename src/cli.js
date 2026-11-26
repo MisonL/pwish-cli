@@ -187,7 +187,13 @@ function cmdModels(args) {
 
 function cmdSkill(args) {
   const builtin = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skill", "pwish", "SKILL.md");
-  const targetDir = args.flags.dir || path.join(os.homedir(), ".agents", "skills", "pwish");
+  // --dir 指向「技能根目录」（如 ~/.agents/skills），实际落到其下的 pwish/ 子目录
+  const root = args.flags.dir;
+  const targetDir = !root
+    ? path.join(os.homedir(), ".agents", "skills", "pwish")
+    : path.basename(path.resolve(root)) === "pwish"
+      ? path.resolve(root)
+      : path.join(path.resolve(root), "pwish");
   const target = path.join(targetDir, "SKILL.md");
 
   if (!fs.existsSync(builtin)) throw new UserError("当前安装中未包含 skill 文件", "NO_SKILL");
@@ -210,7 +216,7 @@ function cmdSkill(args) {
 
   say(`${cyan}agent skill 安装${reset}`);
   say(`  pwish skill --install           安装到 ${target}`);
-  say(`  pwish skill --install --dir DIR 安装到指定目录`);
+  say(`  pwish skill --install --dir ROOT 安装到 ROOT/pwish（ROOT 为技能根目录）`);
   say(`  pwish skill --showpath           打印内置 skill 路径`);
   say(`  pwish skill --print             直接输出 SKILL.md 内容`);
   return 0;

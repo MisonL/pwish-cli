@@ -62,11 +62,12 @@ pwish skill --install    # 安装到 ~/.agents/skills/pwish/SKILL.md
 | 命令 | 作用 |
 |---|---|
 | `pwish skill` | 查看安装说明 |
-| `pwish skill --install --dir <目录>` | 安装到指定 agent 技能目录 |
+| `pwish skill --install --dir <技能根目录>` | 安装到 `<技能根目录>/pwish/`（如 `--dir ~/.codex/skills`） |
 | `pwish skill --showpath` | 打印内置 skill 文件路径 |
 | `pwish skill --print` | 直接输出 SKILL.md 内容 |
 
-如果 agent 从其他技能目录加载（如 `~/.codex/skills/`），用 `--dir` 指向对应位置即可。
+如果 agent 从其他技能目录加载（如 `~/.codex/skills/`），用 `--dir` 指向那个技能根目录即可，
+CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结尾时则直接写入该目录。
 
 ## 开发与测试
 
