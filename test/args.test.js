@@ -79,12 +79,22 @@ test("图片工具相关 flag 解析正确", () => {
   assert.equal(d.flags.scale, "4");
 });
 
-test("CLI 图片工具缺少必填参数时给出明确提示", () => {
+test("CLI 图片工具缺少必填参数时给出明确提示", async () => {
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const fs = await import("node:fs");
   const bin = fileURLToPath(new URL("../bin/pwish.js", import.meta.url));
-  const bg = spawnSync(process.execPath, [bin, "bg", "/tmp/pw-test.png"], { encoding: "utf8" });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pwish-tool-"));
+  const img = path.join(dir, "dummy.png");
+  fs.writeFileSync(img, "dummy");
+
+  const bg = spawnSync(process.execPath, [bin, "bg", img], { encoding: "utf8" });
   assert.notEqual(bg.status, 0);
   assert.match(bg.stdout + bg.stderr, /--prompt/);
-  const erase = spawnSync(process.execPath, [bin, "erase", "/tmp/pw-test.png"], { encoding: "utf8" });
+
+  const erase = spawnSync(process.execPath, [bin, "erase", img], { encoding: "utf8" });
   assert.notEqual(erase.status, 0);
   assert.match(erase.stdout + erase.stderr, /--mask/);
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });
