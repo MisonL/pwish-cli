@@ -79,12 +79,13 @@ CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结�
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，135 个用例
+npm test         # node --test，139 个用例
 npm run test:watch
 ```
 
 测试覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、参数解析（含拼错选项/布尔字符串）、
 退出码契约（未登录 3 / 参数错 2）、URL 白名单、帮助与工具表一致性、轮询容错、
+`gen` 端到端链路（本地假服务，零网络）、文件名消毒与下载超时、
 OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--version`。
 **测试不产生任何 API 请求、不消耗额度。** CI（`.github/workflows/ci.yml`）在 Node 20 / 22 上跑同一套。
 

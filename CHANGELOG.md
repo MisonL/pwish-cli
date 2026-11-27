@@ -5,6 +5,20 @@
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-11-27
+
+### Fixed
+
+- `waitForTasks` 与 `pollTask` 对齐失败优先级：`state<0` 即使同时带 `progress=100` 和 `answer`
+  也判失败（此前可能把失败任务当成功，输出一张实际不存在的图）
+
+### Tests
+
+- 新增**零网络端到端测试**（`test/e2e-gen.test.js`）：本地假服务模拟 `POST /image/conversations`、
+  `POST image-messages`、`GET image-messages/batch`，真实 spawn CLI 验证完整链路：
+  建 N 任务、`--json` 输出结构、任务失败退出码、非法 `-n` 零请求（135 → 139）
+- 端到端用例顺带锁死 `gen --json` 的 `images[] = {taskId,url,file}` 结构
+
 ## [0.18.1] - 2026-11-27
 
 ### Security / Fixed

@@ -93,8 +93,9 @@ export async function waitForTasks(client, taskIds, { timeoutMs = 300_000, inter
       const progress = Number(item.progress ?? 0);
       const hasAnswer = Array.isArray(item.answer) && item.answer.length > 0;
       onProgress?.({ taskId: id, state, progress, item });
-      if (state === 1 || (progress === 100 && hasAnswer)) done.set(id, item);
-      else if (state < 0) done.set(id, { ...item, failed: true });
+      // 失败优先于完成：和 pollTask 保持一致，避免 state<0 + progress=100 被当成成功
+      if (state < 0) done.set(id, { ...item, failed: true });
+      else if (state === 1 || (progress === 100 && hasAnswer)) done.set(id, item);
     }
     if (done.size === taskIds.length) break;
     await new Promise((r) => setTimeout(r, intervalMs));
