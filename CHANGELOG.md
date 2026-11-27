@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-27
+
+### Added
+
+- **`pwish whitebg` 商品还原/白底**：`POST tasks/login/external/gem-image-edit`（`from=product-restore`，
+  `provider_model=72`），结果在 `answer[].file`，已实测出图（939 KB PNG），额度 4 → 3
+  - 服务端硬性要求**正好 2 张源图**：`-i` 传两次，少/多都会报 15026
+  - 参数踩坑记录：`resolution` 只接受 `standard/high/super`（传 `2k` 报 400）；
+    `template_type` 必须在 1-6（不传报 15026）
+  - 接入额度预检与回读（`product_restore`）
+
+### Research
+
+- 官方批量套图接口已定位：`POST tasks/login/suite-batch`、`GET .../groups/recent`、
+  `POST .../groups/resume`、`PUT .../sub-tasks/{id}/title`、`GET .../history`、`.../tags`、
+  `.../results/retry`。创建入参对象所在的批量页 chunk 尚未抓到，暂不实现
+
 ## [0.12.0] - 2026-11-27
 
 ### Changed

@@ -43,6 +43,7 @@ const TOOL_FIELDS = {
   cutout: { remain: "segmentation_login_num" },
   upscale: { remain: "scale_login_num" },
   restore: { remain: "scale_pro_gift" },
+  whitebg: { remain: "product_restore" },
   expand: { remain: "image_expand_num" },
   bg: { remain: "background_free_num" },
   dewatermark: { remain: "watermark_image_free_num" },

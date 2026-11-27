@@ -11,6 +11,7 @@ import {
   removeWatermark,
   removeObject,
   restorePhoto,
+  restoreProduct,
   expandImage,
   translateImage,
   colorize,
@@ -196,6 +197,7 @@ const TOOL_ROWS = [
   ["抠图", "cutout"],
   ["变清晰", "upscale"],
   ["高清修复", "restore"],
+  ["商品还原", "whitebg"],
   ["图像扩展", "expand"],
   ["图片翻译", "translate"],
   ["换背景", "bg"],
@@ -375,6 +377,7 @@ const TOOLS = {
   dewatermark: { label: "去水印", run: removeWatermark, ext: ".png" },
   erase: { label: "去杂物", run: removeObject, ext: ".png" },
   restore: { label: "高清修复", run: restorePhoto, ext: ".jpg" },
+  whitebg: { label: "商品还原/白底", run: restoreProduct, ext: ".png" },
   expand: { label: "图像扩展", run: expandImage, ext: ".png" },
   translate: { label: "图片翻译", run: translateImage, ext: ".jpg" },
   colorize: { label: "黑白上色", run: colorize, ext: ".png" },
@@ -399,6 +402,10 @@ function toolOptions(name, args, image) {
   if (name === "bg") {
     opts.prompt = String(args.flags.prompt || args.flags.p || "").trim();
     if (!opts.prompt) throw new UserError('缺少背景描述。用法：pwish bg ./product.jpg --prompt "纯白影棚背景"', "NO_PROMPT");
+  }
+  if (name === "whitebg") {
+    opts.images = [].concat(args.flags.image || args.flags.i || []).filter(Boolean);
+    if (args.flags.size || args.flags.s) opts.size = args.flags.size || args.flags.s;
   }
   if (name === "erase") {
     const mask = args.flags.mask || "";
@@ -444,11 +451,29 @@ async function cmdTool(name, args) {
   const tool = TOOLS[name];
   if (!tool) throw new UserError(`未知工具：${name}`, "UNKNOWN_TOOL");
 
-  const image = args.flags.image || args.flags.i || args._[1] || "";
-  if (!image) throw new UserError(`缺少输入图片。用法：pwish ${name} ./photo.jpg`, "NO_INPUT");
-  if (!fs.existsSync(image)) throw new UserError(`文件不存在：${image}`, "NO_FILE");
+  const imageList = [].concat(args.flags.image || args.flags.i || []).filter(Boolean);
+  const image = name === "whitebg" ? imageList[0] : imageList[0] || args._[1] || "";
+  if (!image) {
+    throw new UserError(
+      name === "whitebg"
+        ? '缺少输入图片。用法：pwish whitebg -i ./product.jpg -i ./reference.jpg'
+        : `缺少输入图片。用法：pwish ${name} ./photo.jpg`,
+      "NO_INPUT",
+    );
+  }
+  for (const f of imageList.length ? imageList : [image]) {
+    if (!fs.existsSync(f)) throw new UserError(`文件不存在：${f}`, "NO_FILE");
+  }
 
   const opts = toolOptions(name, args, image);
+  if (name === "whitebg") {
+    if (imageList.length !== 2) {
+      throw new UserError(
+        "商品还原需要正好 2 张图（服务端限制）。用法：pwish whitebg -i ./product.jpg -i ./reference.jpg",
+        "BAD_INPUT_COUNT",
+      );
+    }
+  }
   const client = clientFromConfig(args.flags);
 
   const before = await checkQuota(client, {
@@ -1209,6 +1234,7 @@ ${cyan}图片工具（一图一任务，直接出图）
   pwish cutout ./photo.jpg                        抠图去背景 → 透明底 PNG
   pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]   变清晰/放大
   pwish restore ./photo.jpg                       高清修复（模糊、低清、老照片）
+  pwish whitebg -i ./product.jpg -i ./ref.jpg    商品还原/白底（服务端要求正好 2 张图）
   pwish expand ./photo.jpg --to 16:9              图像扩展/扩图（也可 --left 0.2 --top 0.1）
   pwish translate ./poster.jpg --to ENG           图片翻译（默认中→英，--from 指定源语言）
   pwish bg ./product.jpg --prompt "白色大理石台面"  AI 换背景（自动先抠图）
@@ -1276,6 +1302,7 @@ export async function main(argv) {
     case "dewatermark":
     case "erase":
     case "restore":
+    case "whitebg":
     case "expand":
     case "translate":
     case "colorize":

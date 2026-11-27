@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { convertFormat, expansionForTarget, resultUrls, translateImage } from "../src/tools.js";
+import { convertFormat, expansionForTarget, resultUrls, translateImage, restoreProduct } from "../src/tools.js";
 
 test("resultUrls 只取正式结果，忽略预览图与蒙版", () => {
   const data = {
@@ -109,4 +109,11 @@ test("translateImage 拒绝源语言与目标语言相同", async () => {
 test("translateImage 本地拦截 auto 源语言（服务端会 task failed）", async () => {
   const client = { request: () => assert.fail("不应发起请求") };
   await assert.rejects(() => translateImage(client, { file: "x.png", from: "auto", to: "ENG" }), /不支持自动识别/);
+});
+
+test("restoreProduct 要求正好 2 张源图（服务端限制）", async () => {
+  const client = { request: () => assert.fail("不应发起请求") };
+  await assert.rejects(() => restoreProduct(client, { images: ["a.png"] }), /正好 2 张/);
+  await assert.rejects(() => restoreProduct(client, { images: ["a.png", "b.png", "c.png"] }), /正好 2 张/);
+  await assert.rejects(() => restoreProduct(client, { images: [] }), /正好 2 张/);
 });

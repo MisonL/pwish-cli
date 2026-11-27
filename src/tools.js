@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { uploadFile } from "./upload.js";
+import { uploadFile, uploadFiles } from "./upload.js";
 import { pollTask } from "./tasks.js";
 
 /**
@@ -169,6 +169,39 @@ export async function translateImage(client, { file, from = "CHS", to = "ENG", t
   const taskId = await create(client, "tasks/login/external/image-translate", body, "图片翻译");
   const data = await poll(client, "tasks/login/external/image-translate", taskId, timeoutMs);
   return { taskId, data, resourceId: up.resourceId };
+}
+
+/**
+ * 商品还原 / 白底后处理（站点「独立套图」里的 postprocess）。
+ *
+ * 服务端要求**正好 2 张**源图（`product-restore requires exactly 2 source images`），
+ * 走的是 gem-image-edit 而不是普通工具接口，所以参数里要带 provider_model 与 aspect_ratio。
+ */
+export async function restoreProduct(client, { images, size = "1:1", quality = "high", timeoutMs = 600_000 } = {}) {
+  const list = [].concat(images || []).filter(Boolean);
+  if (list.length !== 2) {
+    throw new Error(`商品还原需要正好 2 张图（服务端限制），当前给了 ${list.length} 张`);
+  }
+  const uploaded = await uploadFiles(client, list);
+  const body = {
+    source_resource_ids: uploaded.map((u) => u.resourceId),
+    title: "商品还原",
+    template_type: 1,
+    size,
+    quality,
+    resolution: quality,
+    aspect_ratio: size,
+    from: "product-restore",
+    provider_model: 72,
+    product_id: 482,
+    language: "zh",
+    website_language: "zh",
+    model_type: 72,
+    pattern: "economy",
+  };
+  const taskId = await create(client, "tasks/login/external/gem-image-edit", body, "商品还原");
+  const data = await poll(client, "tasks/login/external/gem-image-edit", taskId, timeoutMs);
+  return { taskId, data, resourceIds: uploaded.map((u) => u.resourceId) };
 }
 
 /** 高清修复（老照片 / 模糊低清图的超分修复）。 */
