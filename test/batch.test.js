@@ -34,3 +34,13 @@ test("collectInputs 空目录返回空数组", () => {
   fs.writeFileSync(path.join(dir, "readme.txt"), "x");
   assert.deepEqual(collectInputs([dir]), []);
 });
+
+test("isQuotaExhausted 只在额度类错误上返回 true", async () => {
+  const { isQuotaExhausted } = await import("../src/cli.js");
+  for (const code of ["QUOTA_EXCEEDED", "CREDIT_NOT_ENOUGH", "DAILY_LIMIT_EXCEEDED", "FREE_PREVIEW_LIMIT_EXCEEDED"]) {
+    assert.equal(isQuotaExhausted({ code }), true, code);
+  }
+  assert.equal(isQuotaExhausted({ code: "NETWORK_ERROR" }), false);
+  assert.equal(isQuotaExhausted(new Error("boom")), false);
+  assert.equal(isQuotaExhausted(null), false);
+});

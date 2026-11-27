@@ -145,5 +145,5 @@ export function preflight(quota, { kind, modelKey }) {
   }
 
   const extra = hasCredits(quota) || quota.membership.isVip ? "；账号还有会员权益，可加 --force 继续" : "";
-  return { level: "block", message: `今日免费次数已用完（次日重置）${extra}`, remain: 0 };
+  return { level: "block", message: `免费次数已用完（是否回补以站点为准）${extra}`, remain: 0 };
 }

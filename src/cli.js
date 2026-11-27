@@ -17,7 +17,7 @@ import {
   convertFormat,
   resultUrls,
 } from "./tools.js";
-import { log, say, json, cyan, green, yellow, dim, reset } from "./output.js";
+import { log, say, json, cyan, green, yellow, dim, reset, setQuiet } from "./output.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
 import { startAuthServer, openBrowser } from "./auth-server.js";
@@ -291,7 +291,7 @@ async function cmdQuota(args) {
   }
 
   if (!hasCredits(quota) && !quota.membership.isVip) {
-    say(`\n${dim}提示：0 表示今日免费次数已用完（次日重置）。会员用户的算粒/额度不在此表，`);
+    say(`\n${dim}提示：0 表示当前没有可用免费次数，是否回补以站点规则为准。会员用户的算粒/额度不在此表，`);
     say(`      需要时用 pwish quota --json 取原始字段，或直接在站点升级。${reset}`);
   }
   return 0;
@@ -451,6 +451,18 @@ async function cmdTool(name, args) {
 
 const IMAGE_EXT = /\.(jpe?g|png|webp|bmp|gif|heic|avif)$/i;
 
+/** 这些错误意味着额度已耗尽，批量任务应立刻停下，而不是把剩下的都撞一遍。 */
+const QUOTA_ERROR_CODES = new Set([
+  "QUOTA_EXCEEDED",
+  "CREDIT_NOT_ENOUGH",
+  "DAILY_LIMIT_EXCEEDED",
+  "FREE_PREVIEW_LIMIT_EXCEEDED",
+]);
+
+export function isQuotaExhausted(err) {
+  return QUOTA_ERROR_CODES.has(err?.code);
+}
+
 /** 把位置参数展开成图片列表：目录取一层图片，文件原样保留。 */
 export function collectInputs(parts) {
   const files = [];
@@ -503,9 +515,10 @@ async function cmdBatch(args) {
   const concurrency = Math.max(1, Math.min(4, Number(args.flags.concurrency || 1)));
   const results = [];
   let cursor = 0;
+  let stopped = false;
 
   const worker = async () => {
-    while (cursor < inputs.length) {
+    while (!stopped && cursor < inputs.length) {
       const index = cursor++;
       const file = inputs[index];
       const label = `[${index + 1}/${inputs.length}] ${path.basename(file)}`;
@@ -515,26 +528,35 @@ async function cmdBatch(args) {
         results[index] = { file, ok: true, taskId: out.taskId, files: out.saved.map((d) => d.file) };
         say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
       } catch (err) {
-        results[index] = { file, ok: false, error: err.message };
+        results[index] = { file, ok: false, error: err.message, code: err.code || null };
         say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+        if (isQuotaExhausted(err)) {
+          stopped = true;
+          say(`${yellow}! 额度已用完，剩余任务跳过${reset}`);
+        }
       }
     }
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, worker));
 
-  const ok = results.filter((r) => r.ok).length;
-  const failed = results.length - ok;
+  const done = results.filter(Boolean);
+  const ok = done.filter((r) => r.ok).length;
+  const failed = done.length - ok;
+  const skipped = inputs.length - done.length;
 
   if (args.flags.json) {
-    json({ tool: name, total: inputs.length, ok, failed, results });
-    return failed ? 1 : 0;
+    json({ tool: name, total: inputs.length, ok, failed, skipped, results: done });
+    return failed || skipped ? 1 : 0;
   }
 
-  say(`\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}`);
-  for (const r of results.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
+  say(
+    `\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}` +
+      `${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}${skipped ? `  ${yellow}跳过 ${skipped}${reset}` : ""}`,
+  );
+  for (const r of done.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
   if (ok) await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
-  return failed ? 1 : 0;
+  return failed || skipped ? 1 : 0;
 }
 
 /**
@@ -640,8 +662,9 @@ async function cmdGenBatch(args) {
   const concurrency = Math.max(1, Math.min(4, Number(args.flags.concurrency || 1)));
   const results = [];
   let cursor = 0;
+  let stopped = false;
   const worker = async () => {
-    while (cursor < inputs.length) {
+    while (!stopped && cursor < inputs.length) {
       const index = cursor++;
       const image = inputs[index];
       const label = `[${index + 1}/${inputs.length}] ${path.basename(image)}`;
@@ -664,23 +687,33 @@ async function cmdGenBatch(args) {
         results[index] = { file: image, ok: out.saved.length > 0, urls: out.urls, files: out.saved.map((d) => d.file), errors: out.errors };
         say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
       } catch (err) {
-        results[index] = { file: image, ok: false, error: err.message };
+        results[index] = { file: image, ok: false, error: err.message, code: err.code || null };
         say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+        if (isQuotaExhausted(err)) {
+          stopped = true;
+          say(`${yellow}! 额度已用完，剩余任务跳过${reset}`);
+        }
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, worker));
 
-  const ok = results.filter((r) => r.ok).length;
-  const failed = results.length - ok;
+  const done = results.filter(Boolean);
+  const ok = done.filter((r) => r.ok).length;
+  const failed = done.length - ok;
+  const skipped = inputs.length - done.length;
   if (args.flags.json) {
-    json({ tool: "gen", conversationId, model: model.key, total: inputs.length, ok, failed, results });
-    return failed ? 1 : 0;
+    json({ tool: "gen", conversationId, model: model.key, total: inputs.length, ok, failed, skipped, results: done });
+    return failed || skipped ? 1 : 0;
   }
-  say(`\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}  会话: ${conversationId}`);
-  for (const r of results.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
+  say(
+    `\n${ok === inputs.length ? green : yellow}完成 ${ok}/${inputs.length}${reset}` +
+      `${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}${skipped ? `  ${yellow}跳过 ${skipped}${reset}` : ""}` +
+      `  会话: ${conversationId}`,
+  );
+  for (const r of done.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
   if (ok) await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key });
-  return failed ? 1 : 0;
+  return failed || skipped ? 1 : 0;
 }
 
 async function cmdGen(args) {
@@ -1180,6 +1213,7 @@ ${cyan}其他
   pwish skill --install         安装 agent skill
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
         --force 跳过额度预检（账号还有会员权益但 CLI 判为 0 时用）
+        --quiet 只输出结果行，不打印进度（脚本用；也可用 PWISH_QUIET=1）
   别名：me=whoami  credits=quota  draw/create=gen  taotu=suite  xiangqing=detail  ls=history  dl=download
 
 ${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。
@@ -1191,6 +1225,7 @@ const require = createRequire(import.meta.url);
 
 export async function main(argv) {
   const args = parseArgs(argv);
+  setQuiet(args.flags.quiet || Boolean(process.env.PWISH_QUIET));
   const cmd = args._[0] || "help";
   if (args.flags.version || args.flags.v || cmd === "--version" || cmd === "-v") {
     say(`pwish ${require("../package.json").version}`);

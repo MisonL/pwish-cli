@@ -43,7 +43,26 @@ export function createClient(overrides = {}) {
     language: cfg.language || "zh",
   });
 
-  async function request(path, { method = "GET", body, query, timeout = 60_000, baseOverride } = {}) {
+  /**
+   * 发一个请求。
+   *
+   * 轮询类 GET 会被网络抖动打断（连接重置、DNS 抽风），这类错误重试是安全的；
+   * POST 会建任务/扣额度，绝不重试，避免重复扣费。
+   */
+  async function request(path, { method = "GET", body, query, timeout = 60_000, baseOverride, retries } = {}) {
+    const attempts = retries ?? (method === "GET" ? 2 : 0);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await send(path, { method, body, query, timeout, baseOverride });
+      } catch (err) {
+        const retryable = err.code === "NETWORK_ERROR" && attempt < attempts;
+        if (!retryable) throw err;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+  }
+
+  async function send(path, { method = "GET", body, query, timeout = 60_000, baseOverride }) {
     const root = baseOverride || base;
     const params = new URLSearchParams(common);
     if (query) for (const [k, v] of Object.entries(query)) {

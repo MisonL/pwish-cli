@@ -30,3 +30,25 @@ test("describeApiError 负数码同样映射（-16 / -30）", () => {
   assert.equal(describeApiError(-30).code, "INVALID_WORDS");
   assert.match(describeApiError(-30).message, /违禁词/);
 });
+
+test("GET 网络错误会重试，POST 不会重试", async () => {
+  const { createClient } = await import("../src/api.js");
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    throw Object.assign(new Error("socket hang up"), { name: "TypeError" });
+  };
+  try {
+    const client = createClient({ token: "v2,1,482,deadbeefdeadbeefdeadbeefdeadbeef", apiBase: "https://example.test" });
+    await assert.rejects(() => client.request("image/conversations"), /网络请求失败/);
+    const getCalls = calls.length;
+    assert.equal(getCalls, 3, "GET 默认 1 次 + 2 次重试");
+
+    calls.length = 0;
+    await assert.rejects(() => client.request("tasks/login/suite", { method: "POST", body: {} }), /网络请求失败/);
+    assert.equal(calls.length, 1, "POST 只发一次");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

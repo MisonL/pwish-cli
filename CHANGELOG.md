@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-27
+
+### Added
+
+- `--quiet`（或 `PWISH_QUIET=1`）：只输出结果行，不打印进度，便于脚本调用
+- 批量任务遇到额度耗尽（`CREDIT_NOT_ENOUGH` / `DAILY_LIMIT_EXCEEDED` / `FREE_PREVIEW_LIMIT_EXCEEDED`）
+  会立即停止并汇总「跳过 N」，不再把剩余图片逐个撞一遍
+- GET 请求遇到网络错误自动重试 2 次（400ms/800ms 退避）；POST 绝不重试，避免重复建任务/扣额度
+- 补测试：GET/POST 重试差异、`isQuotaExhausted` 判定（94 → 96）
+
+### Changed
+
+- **纠正额度恢复口径**：跨天实测翻译 7→7、扩图 0→0 均未回补，抠图计数从不随调用变化。
+  CLI 不再提示「次日重置」，改为「是否回补以站点为准」；README 补实测数据表
+
 ## [0.9.1] - 2026-11-26
 
 ### Changed

@@ -9,8 +9,16 @@ export const yellow = tty ? "\u001b[33m" : "";
 export const dim = tty ? "\u001b[2m" : "";
 export const reset = tty ? "\u001b[0m" : "";
 
+let quiet = false;
+
+/** 静默模式：只保留结果行，进度/提示全部丢弃（脚本调用时用）。 */
+export function setQuiet(value) {
+  quiet = Boolean(value);
+}
+
 /** 进度/提示 → stderr，不污染可管道化的 stdout。 */
 export function log(msg) {
+  if (quiet) return;
   process.stderr.write(`${msg}\n`);
 }
 
