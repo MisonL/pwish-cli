@@ -211,6 +211,8 @@ CLI 只做两件事：把非 0 视为可用、把 0 视为不可用；恢复时�
 pwish whoami                          # 当前账号：会员身份 + 算粒
 pwish quota                           # 额度总览：生图模型 / 设计任务 / 图片工具
 pwish quota --json                    # 机器可读，含会员到期与算粒字段
+# 结构：{ userId, membership{isVip,licenseType,expiredAt}, credits{free,allFree,...},
+#        models{<模型>: 剩余次数}, designer{suite,detail,edit,text2img}, tools{<工具>: 剩余次数} }
 pwish models                          # 模型 / 比例 / 清晰度表
 
 pwish gen "提示词" -i 参考图 [-m 模型] [-r 比例] [-s 2K] [--mode economy|stable] [-n 张数] [-o 目录]
