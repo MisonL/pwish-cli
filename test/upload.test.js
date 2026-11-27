@@ -56,13 +56,14 @@ test("ossV1Signature 支持空 body（contentMd5 默认空串）", () => {
   assert.ok(sig.length > 0);
 });
 
-test("同一文件在一次进程内只上传一次，不同前缀各自独立", async () => {
+test("同一文件在一次进程内只上传一次，不同前缀各自独立", async (t) => {
   const fs = await import("node:fs");
   const os = await import("node:os");
   const path = await import("node:path");
   const { uploadFile } = await import("../src/upload.js");
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-up-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, "a.png");
   fs.writeFileSync(file, "fake-png-bytes");
 
@@ -74,7 +75,7 @@ test("同一文件在一次进程内只上传一次，不同前缀各自独立",
       return {
         data: {
           bucket: "b",
-          endpoint: "e.test",
+          endpoint: "oss-cn-shenzhen.aliyuncs.com",
           objects: { "a.png": "k/a.png" },
           credential: { access_key_id: "id", access_key_secret: "sec", security_token: "tok" },
         },
@@ -101,4 +102,28 @@ test("同一文件在一次进程内只上传一次，不同前缀各自独立",
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+test("上传授权返回非阿里云 OSS 域名时拒绝，避免把文件 PUT 到任意主机", async (t) => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { uploadFile } = await import("../src/upload.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-up2-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "b.png");
+  fs.writeFileSync(file, "bytes");
+
+  const client = {
+    request: async () => ({
+      data: {
+        bucket: "b",
+        endpoint: "evil.example.com",
+        objects: { "b.png": "k/b.png" },
+        credential: { access_key_id: "id", access_key_secret: "sec", security_token: "tok" },
+      },
+    }),
+  };
+  await assert.rejects(() => uploadFile(client, file), /意外的 OSS 域名/);
 });

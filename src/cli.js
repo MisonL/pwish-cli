@@ -24,7 +24,6 @@ import { log, say, json, cyan, green, yellow, dim, reset, setQuiet } from "./out
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
 import { startAuthServer, openBrowser } from "./auth-server.js";
-import { execFileSync } from "node:child_process";
 import { MODELS, RATIOS, SUITE_SCENES, SUITE_SITES, resolveModel, buildImageMessagePayload } from "./models.js";
 import { uploadFiles } from "./upload.js";
 import {
@@ -95,46 +94,11 @@ async function oauthLogin(args) {
 
 async function cmdLogin(args) {
   let token = args.flags.token || args._[1] || "";
-  if (!token && !process.stdin.isTTY && !args.flags.paste) token = await readStdin();
+  if (!token && !process.stdin.isTTY) token = await readStdin();
 
-  // 默认走本机登录页；--token / --paste 供 CI 与无浏览器环境使用
-  if (!token && !args.flags.paste) return oauthLogin(args);
-
-  if (args.flags.paste) {
-    try {
-      token = execPaste();
-    } catch (err) {
-      throw new UserError("读取剪贴板失败。用 pwish login 走网页授权，或 pwish login --token 'v2,...'", "PASTE_FAILED");
-    }
-  }
-  if (!token) throw new UserError("没有拿到 token", "NO_TOKEN_INPUT");
+  // 默认走本机登录页；--token 供 CI 与无浏览器环境使用
+  if (!token) return oauthLogin(args);
   return persistToken(token, { json: args.flags.json });
-}
-
-function execPaste() {
-  // 只在 --paste 时用；各平台剪贴板读取命令
-  const platform = process.platform;
-  if (platform === "darwin") return execFileSync("pbpaste", { encoding: "utf8" }).trim();
-  if (platform === "win32") {
-    try {
-      return execFileSync("powershell", ["-NoProfile", "-Command", "Get-Clipboard -Raw"], { encoding: "utf8" }).trim();
-    } catch {
-      throw new UserError("读取剪贴板失败（需要 PowerShell）。可以改用 pwish login --token 'v2,...'", "CLIPBOARD_FAILED");
-    }
-  }
-  const candidates = [
-    ["xclip", ["-selection", "clipboard"]],
-    ["xsel", ["--clipboard", "--output"]],
-    ["wl-paste", []],
-  ];
-  for (const [cmd, args] of candidates) {
-    try {
-      return execFileSync(cmd, args, { encoding: "utf8" }).trim();
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error("未找到剪贴板工具（需要 xclip / xsel / wl-paste）");
 }
 
 function clientFromConfig(flags = {}) {
@@ -206,6 +170,9 @@ const TOOL_ROWS = [
   ["去水印", "dewatermark"],
   ["去杂物", "erase"],
   ["上色", "colorize"],
+  ["去褶皱", "wrinkle"],
+  ["幽灵模特", "mannequin"],
+  ["平铺图", "flatlay"],
   ["格式转换", "convert"],
 ];
 
@@ -222,6 +189,15 @@ function quotaCell(remain) {
   return remain > 0 ? `${green}${text}${reset}` : `${yellow}${text}${reset}`;
 }
 
+/** `-n` 必须是正整数：`-n 1.5` / `-n 0` 直接报错，别让服务端替我们兜底。 */
+export function parseImageCount(raw, { max = 10 } = {}) {
+  if (raw === undefined) return 1;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new UserError(`-n 必须是大于 0 的整数，收到：${raw}`, "BAD_COUNT");
+  if (n > max) throw new UserError(`-n 一次最多 ${max} 张，收到：${n}`, "BAD_COUNT");
+  return n;
+}
+
 /** 只读额度快照（dry-run 用，不做预检判定、不打印告警）。 */
 async function readQuota(client) {
   try {
@@ -232,8 +208,12 @@ async function readQuota(client) {
 }
 
 /** dry-run 时统一打印「打算做什么 + 要花几次额度」，不碰建任务接口。 */
-function showPlan({ action, steps, quota, kind, key }) {
+function showPlan({ action, steps, quota, kind, key, json: asJson = false }) {
   const remain = pickRemain(quota, kind, key);
+  if (asJson) {
+    json({ dryRun: true, action, steps, remain: remain ?? null, enough: remain === undefined ? null : steps <= remain });
+    return 0;
+  }
   say(`${cyan}计划${reset} ${action}`);
   say(`  预计消耗：${steps} 次${remain === undefined ? "" : `（当前剩余 ${remain} 次）`}`);
   if (remain !== undefined && steps > remain) say(`  ${yellow}! 额度不够，实际执行会被预检拦下${reset}`);
@@ -428,7 +408,7 @@ function toolOptions(name, args, image) {
     if (!opts.prompt) throw new UserError('缺少背景描述。用法：pwish bg ./product.jpg --prompt "纯白影棚背景"', "NO_PROMPT");
   }
   if (name === "whitebg") {
-    opts.images = [].concat(args.flags.image || args.flags.i || []).filter(Boolean);
+    opts.images = [].concat(args.flags.image || []).filter(Boolean);
     if (args.flags.size || args.flags.s) opts.size = args.flags.size || args.flags.s;
   }
   if (name === "erase") {
@@ -478,7 +458,7 @@ async function cmdTool(name, args) {
   const tool = TOOLS[name];
   if (!tool) throw new UserError(`未知工具：${name}`, "UNKNOWN_TOOL");
 
-  const imageList = [].concat(args.flags.image || args.flags.i || []).filter(Boolean);
+  const imageList = [].concat(args.flags.image || []).filter(Boolean);
   const image = name === "whitebg" ? imageList[0] : imageList[0] || args._[1] || "";
   if (!image) {
     throw new UserError(
@@ -504,7 +484,14 @@ async function cmdTool(name, args) {
   const client = clientFromConfig(args.flags);
 
   if (args.flags["dry-run"]) {
-    return showPlan({ action: `${tool.label} ${path.basename(image)}`, steps: 1, quota: await readQuota(client), kind: "tool", key: name });
+    return showPlan({
+      action: `${tool.label} ${path.basename(image)}`,
+      steps: 1,
+      quota: await readQuota(client),
+      kind: "tool",
+      key: name,
+      json: Boolean(args.flags.json),
+    });
   }
 
   const before = await checkQuota(client, {
@@ -562,6 +549,12 @@ export function collectInputs(parts) {
 async function cmdBatch(args) {
   const name = args._[1];
   if (name === "gen") return cmdGenBatch(args);
+  if (name === "whitebg") {
+    throw new UserError(
+      "whitebg 需要为每张图各配一张参考图（服务端要求正好 2 张），不支持目录批量；请用 for 循环逐张调用",
+      "BATCH_UNSUPPORTED",
+    );
+  }
   const tool = TOOLS[name];
   if (!tool) {
     throw new UserError(
@@ -582,6 +575,7 @@ async function cmdBatch(args) {
       quota: await readQuota(client),
       kind: "tool",
       key: name,
+      json: Boolean(args.flags.json),
     });
   }
   const quota = await checkQuota(client, {
@@ -612,14 +606,17 @@ async function cmdBatch(args) {
       try {
         log(`${dim}${label} ${tool.label}…${reset}`);
         const out = await runToolOnce(client, name, file, args, { quiet: true });
-        results[index] = { file, ok: true, taskId: out.taskId, files: out.saved.map((d) => d.file) };
-        say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
+        results[index] = { file, ok: true, taskId: out.taskId, files: out.saved.map((d) => d.file), images: out.urls };
+        const line = `${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || out.urls.length + " 张（未下载）"}`;
+        args.flags.json ? log(line) : say(line);
       } catch (err) {
         results[index] = { file, ok: false, error: err.message, code: err.code || null };
-        say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+        const line = `${yellow}✗${reset} ${label} 失败：${err.message}`;
+        args.flags.json ? log(line) : say(line);
         if (isQuotaExhausted(err)) {
           stopped = true;
-          say(`${yellow}! 额度已用完，剩余任务跳过${reset}`);
+          const note = `${yellow}! 额度已用完，剩余任务跳过${reset}`;
+          args.flags.json ? log(note) : say(note);
         }
       }
     }
@@ -714,7 +711,7 @@ async function cmdGenBatch(args) {
   const sizeName = (args.flags.size || args.flags.s || "2K").toUpperCase();
   const pattern = (args.flags.mode || "economy").toLowerCase();
   const format = (args.flags.format || args.flags.f || "png").toLowerCase();
-  const count = Math.max(1, Number(args.flags.n || 1));
+  const count = parseImageCount(args.flags.n);
   const timeoutMs = Number(args.flags.timeout || 300) * 1000;
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
   if (!["economy", "stable"].includes(pattern)) throw new UserError("--mode 只能是 economy 或 stable");
@@ -741,6 +738,7 @@ async function cmdGenBatch(args) {
       quota: await readQuota(client),
       kind: "model",
       key: model.key,
+      json: Boolean(args.flags.json),
     });
   }
   const quota = await checkQuota(client, { kind: "model", key: model.key, label: `模型 ${model.key}：`, force: Boolean(args.flags.force) });
@@ -780,14 +778,23 @@ async function cmdGenBatch(args) {
           timeoutMs,
           download: !args.flags["no-download"],
         });
-        results[index] = { file: image, ok: out.saved.length > 0, urls: out.urls, files: out.saved.map((d) => d.file), errors: out.errors };
-        say(`${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || "已生成"}`);
+        results[index] = {
+          file: image,
+          ok: out.saved.length > 0 || out.urls.length > 0,
+          urls: out.urls,
+          files: out.saved.map((d) => d.file),
+          errors: out.errors,
+        };
+        const line = `${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || `${out.urls.length} 张（未下载）`}`;
+        args.flags.json ? log(line) : say(line);
       } catch (err) {
         results[index] = { file: image, ok: false, error: err.message, code: err.code || null };
-        say(`${yellow}✗${reset} ${label} 失败：${err.message}`);
+        const line = `${yellow}✗${reset} ${label} 失败：${err.message}`;
+        args.flags.json ? log(line) : say(line);
         if (isQuotaExhausted(err)) {
           stopped = true;
-          say(`${yellow}! 额度已用完，剩余任务跳过${reset}`);
+          const note = `${yellow}! 额度已用完，剩余任务跳过${reset}`;
+          args.flags.json ? log(note) : say(note);
         }
       }
     }
@@ -823,8 +830,8 @@ async function cmdGen(args) {
   const sizeName = (args.flags.size || args.flags.s || "2K").toUpperCase();
   const pattern = (args.flags.mode || "economy").toLowerCase();
   const format = (args.flags.format || args.flags.f || "png").toLowerCase();
-  const count = Math.max(1, Number(args.flags.n || 1));
-  const images = [].concat(args.flags.image || args.flags.i || []);
+  const count = parseImageCount(args.flags.n);
+  const images = [].concat(args.flags.image || []);
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
   const timeoutMs = Number(args.flags.timeout || 300) * 1000;
   const client = clientFromConfig(args.flags);
@@ -839,6 +846,7 @@ async function cmdGen(args) {
       quota: await readQuota(client),
       kind: "model",
       key: model.key,
+      json: Boolean(args.flags.json),
     });
   }
 
@@ -937,7 +945,7 @@ async function cmdGen(args) {
 }
 
 async function cmdSuite(args) {
-  const images = [].concat(args.flags.image || args.flags.i || []);
+  const images = [].concat(args.flags.image || []);
   if (!images.length) throw new UserError("套图需要至少 1 张商品图：pwish suite -i ./product.jpg --selling \"产品名 + 卖点\"");
   const selling = args.flags.selling || args._[1] || "";
   const site = (args.flags.site || "amazon").toLowerCase();
@@ -964,6 +972,7 @@ async function cmdSuite(args) {
       quota: await readQuota(client),
       kind: "design",
       key: "suite",
+      json: Boolean(args.flags.json),
     });
   }
 
@@ -1056,7 +1065,7 @@ async function cmdSuite(args) {
 }
 
 async function cmdDetail(args) {
-  const images = [].concat(args.flags.image || args.flags.i || []);
+  const images = [].concat(args.flags.image || []);
   if (!images.length) throw new UserError('详情图需要至少 1 张商品图：pwish detail -i ./product.jpg --selling "产品名 + 卖点"');
   const selling = args.flags.selling || args._[1] || "";
   if (!selling) throw new UserError('详情图需要卖点（AI 要据此写每个模块的文案）：--selling "简约保温杯 500ml，24h 保温"', "NO_SELLING");
@@ -1090,6 +1099,7 @@ async function cmdDetail(args) {
       quota: await readQuota(client),
       kind: "design",
       key: "detail",
+      json: Boolean(args.flags.json),
     });
   }
 
@@ -1197,7 +1207,7 @@ async function cmdTask(args) {
       conversationId: item.conversation_id,
     });
   }
-  if (args.flags.json) return json(out), 0;
+  if (args.flags.json) return json(out), missing ? 1 : 0;
   for (const r of out) {
     if (!r.found) {
       say(`${yellow}${r.taskId} 未找到`);
@@ -1210,7 +1220,7 @@ async function cmdTask(args) {
     }
     for (const u of r.images) say(`  ${u}`);
   }
-  return 0;
+  return missing ? 1 : 0; // 有查不到的 id 时退出码非 0，「没查到」不能当成功
 }
 
 async function cmdHistory(args) {
@@ -1292,7 +1302,6 @@ ${cyan}登录
   pwish login                    打开本机登录页（微信扫码 / 账号密码）
   pwish login --no-open          不自动开浏览器，手动访问打印的链接
   pwish login --token 'v2,...'   CI/无浏览器环境直接给 token
-  pwish login --paste            从剪贴板读 token
   pwish whoami                   查看当前账号（会员身份 / 算粒）
   pwish quota                    额度总览：模型、设计任务、图片工具
   pwish logout

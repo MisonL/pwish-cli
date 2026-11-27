@@ -10,7 +10,6 @@ import { ApiError } from "./api.js";
  * 查询抛错会先重试，只有连续 `maxConsecutiveErrors` 次失败才放弃。
  */
 export async function pollTask(
-  client,
   fetcher,
   { timeoutMs = 300_000, intervalMs = 3000, onProgress, maxConsecutiveErrors = 5 } = {},
 ) {
@@ -38,10 +37,11 @@ export async function pollTask(
       const state = Number(data.state ?? data.status ?? 0);
       const progress = Number(data.progress ?? 0);
       onProgress?.({ state, progress, data, elapsedMs: Date.now() - started });
-      if (state === 1 || progress === 100) return data;
+      // 失败优先于完成：有的任务会同时回 state<0 与 progress=100
       if (state < 0) {
         throw new Error(`任务失败（state=${state}）${data.error ? `：${data.error}` : ""}`);
       }
+      if (state === 1 || progress === 100) return data;
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -127,12 +127,30 @@ function extFromUrl(url, fallback) {
   return fallback;
 }
 
+/** 只允许从这些域名下载/拉取结果，避免任务响应里的地址把请求带到任意主机。 */
+const ALLOWED_HOSTS = [/(^|\.)aliyuncs\.com$/i, /(^|\.)aoscdn\.com$/i, /(^|\.)picwish\.cn$/i];
+
+export function assertSafeUrl(raw) {
+  let parsed;
+  try {
+    parsed = new URL(String(raw));
+  } catch {
+    throw new Error(`结果地址不合法：${String(raw).slice(0, 120)}`);
+  }
+  if (parsed.protocol !== "https:") throw new Error(`只允许 https 结果地址：${parsed.protocol}`);
+  if (!ALLOWED_HOSTS.some((re) => re.test(parsed.hostname))) {
+    throw new Error(`结果地址域名不在白名单：${parsed.hostname}`);
+  }
+  return parsed.toString();
+}
+
 export async function downloadImage(url, outDir, basename, fallbackExt = ".png") {
   fs.mkdirSync(outDir, { recursive: true });
-  const ext = extFromUrl(url, fallbackExt);
+  const safeUrl = assertSafeUrl(url);
+  const ext = extFromUrl(safeUrl, fallbackExt);
   const file = path.join(outDir, `${basename}${ext}`);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}：${url.slice(0, 120)}`);
+  const res = await fetch(safeUrl);
+  if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}：${safeUrl.slice(0, 120)}`);
   const buf = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(file, buf);
   return { file, bytes: buf.length };

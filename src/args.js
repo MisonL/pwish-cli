@@ -11,7 +11,7 @@ const VALUE_FLAGS = new Set([
 
 /** 纯开关（不需要值）。 */
 const BOOLEAN_FLAGS = new Set([
-  "json", "no-download", "paste", "help", "no-plan",
+  "json", "no-download", "help", "no-plan",
   "no-open", "version", "v", "skill", "install", "print", "showpath", "force", "quiet", "dry-run",
 ]);
 
@@ -34,6 +34,22 @@ function canonical(key) {
  * 解析 argv。返回 { _: 位置参数, flags: 选项表 }。
  * 支持 `--key value`、`--key=value`、`-k value`；`-i` 可重复出现（收集为数组）。
  */
+/** 布尔值归一：--force=false / --force=0 视为关闭，避免字符串 "false" 被当成真。 */
+function toBool(raw) {
+  const v = String(raw).trim().toLowerCase();
+  if (["false", "0", "no", "off"].includes(v)) return false;
+  if (["true", "1", "yes", "on"].includes(v)) return true;
+  throw new UserError(`开关选项只接受 true/false，收到：${raw}`);
+}
+
+/** -i/--image 可重复：统一收成数组，且不会把已有字符串拆成字符。 */
+function pushImage(flags, value) {
+  const prev = flags.image;
+  if (prev === undefined) flags.image = [value];
+  else if (Array.isArray(prev)) flags.image = [...prev, value];
+  else flags.image = [prev, value];
+}
+
 export function parseArgs(argv) {
   const args = { _: [], flags: {} };
 
@@ -55,19 +71,25 @@ export function parseArgs(argv) {
     }
 
     if (arg.startsWith("--")) {
-      const [rawKey, inline] = arg.slice(2).split("=");
+      const eq = arg.indexOf("=");
+      const rawKey = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
+      const inline = eq === -1 ? undefined : arg.slice(eq + 1);
       const key = canonical(rawKey.trim());
-      if (inline !== undefined) {
-        args.flags[key] = inline;
+      if (inline !== undefined && BOOLEAN_FLAGS.has(key)) {
+        args.flags[key] = toBool(inline);
+      } else if (inline !== undefined) {
+        if (key === "image") pushImage(args.flags, inline);
+        else args.flags[key] = inline;
       } else if (BOOLEAN_FLAGS.has(key)) {
         args.flags[key] = true;
       } else if (VALUE_FLAGS.has(key)) {
         const { value, consumed } = takeValue(key, undefined, idx);
-        args.flags[key] = key === "image" ? [...(args.flags.image || []), value] : value;
+        if (key === "image") pushImage(args.flags, value);
+        else args.flags[key] = value;
         idx += consumed;
       } else {
-        // 未知长选项按开关处理，保持向前兼容
-        args.flags[key] = true;
+        // 拼错的选项必须报错：否则 --dryrun 会静默变成真跑，可能白扣额度
+        throw new UserError(`未知选项 --${rawKey}。用 pwish help 查看支持的选项`, "UNKNOWN_FLAG");
       }
       continue;
     }
@@ -76,11 +98,13 @@ export function parseArgs(argv) {
       const key = canonical(arg.slice(1));
       if (VALUE_FLAGS.has(key)) {
         const { value, consumed } = takeValue(key, undefined, idx);
-        if (key === "image") args.flags.image = [...(args.flags.image || []), value];
+        if (key === "image") pushImage(args.flags, value);
         else args.flags[key] = value;
         idx += consumed;
-      } else {
+      } else if (BOOLEAN_FLAGS.has(key)) {
         args.flags[key] = true;
+      } else {
+        throw new UserError(`未知选项 -${arg.slice(1)}。用 pwish help 查看支持的选项`, "UNKNOWN_FLAG");
       }
       continue;
     }

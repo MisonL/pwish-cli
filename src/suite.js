@@ -1,6 +1,5 @@
-import { dimensionFor, SIZE_TO_QUALITY, SUITE_SITES, SUITE_SCENES, resolveModel } from "./models.js";
-import { uploadFiles } from "./upload.js";
-import { pollTask, createConversation, waitForTasks, imagesOf } from "./tasks.js";
+import { dimensionFor, SIZE_TO_QUALITY, SUITE_SITES, resolveModel } from "./models.js";
+import { pollTask, createConversation, imagesOf } from "./tasks.js";
 
 /**
  * 套图第一步：让 AI 根据商品图 + 卖点，为每个场景写提示词。
@@ -21,7 +20,7 @@ export async function planSuitePrompts(client, { resourceIds, sellingPoints, sit
   const res = await client.request("tasks/login/suite/prompt", { method: "POST", body, timeout: 90_000 });
   const taskId = res.data?.task_id;
   if (!taskId) throw new Error("AI 写卖点失败：接口未返回 task_id");
-  const data = await pollTask(client, async () => {
+  const data = await pollTask(async () => {
     const r = await client.request(`tasks/login/suite/prompt/${taskId}`, { timeout: 60_000 });
     return r.data;
   }, { timeoutMs: 300_000, intervalMs: 2500 });
@@ -78,7 +77,7 @@ export async function generateSuite(client, {
   const taskId = res.data?.task_id;
   if (!taskId) throw new Error(`套图任务创建失败：${JSON.stringify(res).slice(0, 200)}`);
 
-  const data = await pollTask(client, async () => {
+  const data = await pollTask(async () => {
     const r = await client.request(`tasks/login/suite/${taskId}`, { timeout: 60_000 });
     return r.data;
   }, { timeoutMs, intervalMs: 4000, onProgress: (p) => onProgress?.({ ...p, taskId }) });
@@ -126,4 +125,3 @@ export function suiteImagesOf(data) {
   return out;
 }
 
-export { SUITE_SCENES, SUITE_SITES, waitForTasks, uploadFiles };

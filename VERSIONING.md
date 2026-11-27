@@ -14,7 +14,7 @@
 
 ## 发布流程
 
-1. **改代码**，确保 `npm run verify` 全绿（自检 + 格式 + 44 测试）。
+1. **改代码**，确保 `npm run verify` 全绿（自检 + 格式 + 全部测试）。
 2. **更新 CHANGELOG.md**：把改动写入 `[Unreleased]` 之上的新版本段落，标注日期。
 3. **升版本号**：`npm version patch|minor|major`（会自动改 package.json 并打 git tag `vX.Y.Z`）。
 4. **同步 skill 安装副本**（如本地有）：`cp -R skill/pwish ~/.agents/skills/pwish`。

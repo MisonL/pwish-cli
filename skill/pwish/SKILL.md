@@ -47,7 +47,6 @@ pwish login
 | 远程 / SSH（不自动开浏览器） | `pwish login --no-open` 后手动打开打印出的链接 |
 | 指定端口 | `pwish login --port 8765` |
 | CI / 无浏览器 | `pwish login --token 'v2,...'` |
-| 剪贴板 | `pwish login --paste` |
 
 登录态存 `~/.config/pwish/config.json`（0600）。**不要**把 token 写进仓库、日志或最终回答。
 需要让用户自己登录时，提示他直接跑 `pwish login`，不要索要账号密码。
@@ -134,8 +133,8 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 | `pwish upscale ./p.jpg` | 变清晰 / 放大 | — | JPG；`--type photo\|general\|text`，`--scale 2` |
 | `pwish restore ./p.jpg` | 高清修复（模糊、低清、老照片） | — | JPG |
 | `pwish whitebg -i ./p.jpg -i ./ref.jpg` | 商品还原 / 白底 | 正好 2 张图 | PNG |
-| `pwish mannequin ./p.jpg` | 幽灵模特（服装 3D 图） | `--ratio` | PNG |
-| `pwish flatlay ./p.jpg` | 平铺图（俯拍） | `--ratio` | PNG |
+| `pwish mannequin ./p.jpg` | 幽灵模特（服装 3D 图） | `--ratio`（默认 1:1） | PNG |
+| `pwish flatlay ./p.jpg` | 平铺图（俯拍） | `--ratio`（默认 1:1） | PNG |
 | `pwish wrinkle ./p.jpg` | 去衣服褶皱 | — | JPG |
 | `pwish expand ./p.jpg --to 16:9` | 图像扩展 / 扩图 | `--to` 或 `--left/--top` | PNG |
 | `pwish translate ./p.jpg --to ENG` | 图片翻译（换字保版式） | `--from/--to` 语言码 | JPG |
@@ -177,8 +176,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **图片翻译**：默认中译英（`--from CHS --to ENG`），语言码用三字母大写（CHS/CHT/ENG/JPN/KOR/FRA/DEU/
   ESP/POR/PTB/ROM/RUS/VIN/ARA/THA）。译文替换画面文字、保留原有版式，适合把国内详情图换语种重投。
   源语言写 `auto` 服务端会直接返回 `task failed`（实测），CLI 已在本地拦掉并提示，按图片实际语种传 `CHS` 等语言码。
-- **额度和生图分开**：这些工具走各自的每日免费次数，不受生图模型算粒影响；`quota` 里看不到明细，
-  失败时报 `CREDIT_NOT_ENOUGH` 就是当日次数用完了。
+- **额度和生图分开**：这些工具走各自的免费次数，不受生图模型算粒影响；`pwish quota` 的「图片工具」
+  一节能看到每个工具的**当前计数**（已用量字段语义未确认，CLI 不显示）。失败时报 `CREDIT_NOT_ENOUGH`
+  通常就是次数用完了。
 - 输出文件默认落在 `out/`，命名 `<原文件名>-<工具名>-<时间戳>`；`--no-download` 只打印 URL。
 
 ## 4. 结果查询与重下

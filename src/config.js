@@ -35,11 +35,24 @@ export function loadConfig() {
 }
 
 export function saveConfig(patch) {
-  const current = loadConfig();
-  const next = { ...current, ...patch };
+  // 只合并磁盘上的内容 + 本次 patch：环境变量（PWISH_TOKEN 等）属于临时覆盖，
+  // 不能被写进配置文件，否则一次 CI 运行就会把临时 token 固化下来。
+  let file = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) file = parsed;
+    } catch {
+      file = {}; // 损坏时按空配置重写，loadConfig 已经负责报错提示
+    }
+  }
+  const next = { ...DEFAULTS, ...file, ...patch };
   delete next.tokenFix;
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  // 先在内存里限制权限，避免 0644 的窗口期
+  const tmp = `${CONFIG_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, CONFIG_PATH);
   try {
     fs.chmodSync(CONFIG_PATH, 0o600);
   } catch {

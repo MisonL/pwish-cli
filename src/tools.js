@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { uploadFile, uploadFiles } from "./upload.js";
-import { pollTask } from "./tasks.js";
+import { pollTask, assertSafeUrl } from "./tasks.js";
 
 /**
  * 图片工具类任务：上传资源 → 建任务 → 轮询结果 → 下载。
@@ -27,7 +27,7 @@ async function create(client, endpoint, body, label) {
 
 /** 轮询查询接口，直到 progress 100。 */
 function poll(client, endpoint, taskId, timeoutMs, query) {
-  return pollTask(client, () => client.request(`${endpoint}/${taskId}`, { query }).then((r) => r.data), {
+  return pollTask(() => client.request(`${endpoint}/${taskId}`, { query }).then((r) => r.data), {
     timeoutMs,
     intervalMs: 2000,
   });
@@ -135,7 +135,7 @@ export async function expandImage(client, { file, to, left, right, top, bottom, 
   return { taskId, data, resourceId: up.resourceId };
 }
 
-/** 图片翻译。语言码沿用站点翻译服务（NLLM 码表），源语言传 "auto" 交给服务端识别。 */
+/** 图片翻译语言码（站点码表）。注意：服务端不支持 source=auto，CLI 会本地拒绝。 */
 const TRANSLATE_LANGS = ["auto", "CHS", "CHT", "ENG", "JPN", "KOR", "FRA", "DEU", "ESP", "POR", "PTB", "ROM", "RUS", "VIN", "ARA", "THA"];
 
 /** 图片翻译：上传 → 建任务 → 轮询，结果在 data.images[].image。 */
@@ -226,7 +226,7 @@ export async function changeBackground(client, { file, prompt = "", timeoutMs = 
 
   const tmp = path.join(os.tmpdir(), `pwish-cut-${process.pid}-${Date.now()}.png`);
   try {
-    const res = await fetch(cutUrl);
+    const res = await fetch(assertSafeUrl(cutUrl));
     if (!res.ok) throw new Error(`下载抠图结果失败 HTTP ${res.status}`);
     fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
     const { resourceId } = await uploadFile(client, tmp, PREFIX.general);

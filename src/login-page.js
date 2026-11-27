@@ -82,7 +82,7 @@ const LOGO_SVG = `<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" ar
 <path d="M24 17c5.2 0 8.6 3.3 8.6 7.2S29.2 31.4 24 31.4 15.4 28.1 15.4 24.2 18.8 17 24 17z" fill="url(#g)"/>
 </svg>`;
 
-export function renderLoginPage({ origin, state, redirectUri }) {
+export function renderLoginPage({ origin, state }) {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -173,7 +173,7 @@ export function renderLoginPage({ origin, state, redirectUri }) {
   function loadQr() {
     stopPolling();
     hint("正在获取二维码…", true);
-    fetch("/api/qrcode", { method: "POST" })
+    fetch("/api/qrcode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: STATE }) })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.qrUrl) { hint(j.message || "获取二维码失败"); return; }
@@ -183,7 +183,7 @@ export function renderLoginPage({ origin, state, redirectUri }) {
           fetch("/api/qrcode/poll", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ hashKey: j.hashKey })
+            body: JSON.stringify({ hashKey: j.hashKey, state: STATE })
           })
             .then(function (r) { return r.json(); })
             .then(function (p) {
@@ -212,7 +212,7 @@ export function renderLoginPage({ origin, state, redirectUri }) {
     fetch("/api/login/password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account: account, password: password })
+      body: JSON.stringify({ account: account, password: password, state: STATE })
     })
       .then(function (r) { return r.json(); })
       .then(function (j) {

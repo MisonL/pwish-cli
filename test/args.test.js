@@ -106,3 +106,25 @@ test("CLI 图片工具缺少必填参数时给出明确提示", async () => {
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("未知选项直接报错，避免拼错 --dry-run 变成真跑", () => {
+  assert.throws(() => parseArgs(["--dryrun"]), /未知选项 --dryrun/);
+  assert.throws(() => parseArgs(["-Z"]), /未知选项 -Z/);
+});
+
+test("布尔开关支持 =false/0 且不会被当成真", () => {
+  assert.equal(parseArgs(["--force=false"]).flags.force, false);
+  assert.equal(parseArgs(["--force=0"]).flags.force, false);
+  assert.equal(parseArgs(["--force=true"]).flags.force, true);
+  assert.equal(parseArgs(["--dry-run=no"]).flags["dry-run"], false);
+  assert.throws(() => parseArgs(["--force=maybe"]), /只接受 true\/false/);
+});
+
+test("值里含等号不会被截断", () => {
+  assert.equal(parseArgs(["--prompt=a=b=c"]).flags.prompt, "a=b=c");
+});
+
+test("--image= 与 -i 混用不会把字符串拆成字符", () => {
+  const parsed = parseArgs(["--image=a.png", "-i", "b.png"]);
+  assert.deepEqual(parsed.flags.image, ["a.png", "b.png"]);
+});

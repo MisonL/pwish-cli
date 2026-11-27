@@ -72,6 +72,7 @@ async function performUpload(client, abs, prefix) {
   if (!key) throw new Error(`上传授权未返回 object key：${JSON.stringify(data).slice(0, 200)}`);
 
   const host = `${data.bucket}.${data.endpoint}`;
+  if (!/(^|\.)aliyuncs\.com$/i.test(host)) throw new Error(`上传授权返回了意外的 OSS 域名：${host}`);
   const date = new Date().toUTCString();
   const callback = data.callback
     ? Buffer.from(
@@ -129,10 +130,16 @@ async function performUpload(client, abs, prefix) {
 export async function uploadFiles(client, files, prefix, { concurrency = 3 } = {}) {
   const out = new Array(files.length);
   let cursor = 0;
+  let failed = false;
   const worker = async () => {
-    while (cursor < files.length) {
+    while (!failed && cursor < files.length) {
       const index = cursor++;
-      out[index] = await uploadFile(client, files[index], prefix);
+      try {
+        out[index] = await uploadFile(client, files[index], prefix);
+      } catch (err) {
+        failed = true; // 一张传不上去就别继续烧带宽，让调用方尽早报错
+        throw err;
+      }
     }
   };
   const lanes = Math.max(1, Math.min(concurrency, files.length));

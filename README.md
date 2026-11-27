@@ -29,7 +29,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 
 | | |
 |---|---|
-| **本机登录页** | 微信扫码 / 手机号邮箱密码，视觉与官网一致，凭据不落盘 |
+| **本机登录页** | 微信扫码 / 手机号邮箱密码，视觉与官网一致；密码不落盘，token 存本地配置（0600） |
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
@@ -78,11 +78,12 @@ CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结�
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，42 个用例
+npm test         # node --test，123 个用例
 npm run test:watch
 ```
 
-测试覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、参数解析、
+测试覆盖：模型 payload 分族构造、套图结果解析、配置与 token 解析、参数解析（含拼错选项/布尔字符串）、
+退出码契约（未登录 3 / 参数错 2）、URL 白名单、帮助与工具表一致性、轮询容错、
 OAuth 授权码/PKCE/CSRF/Host 防护、Snappy 解压与 varint 解码、CLI `--version`。
 **测试不产生任何 API 请求、不消耗额度。** CI（`.github/workflows/ci.yml`）在 Node 20 / 22 上跑同一套。
 
@@ -141,15 +142,17 @@ pwish login
 | `pwish login --no-open` | 不自动开浏览器，只打印授权链接（远程/SSH） |
 | `pwish login --port 8765` | 指定回环端口（默认随机） |
 | `pwish login --token 'v2,...'` | CI / 无浏览器环境直接给 token |
-| `pwish login --paste` | 从剪贴板读 token |
 | `pwish whoami` / `pwish quota` / `pwish logout` | 账号 / 额度 / 退出 |
 
 安全设计：
 - 只 `listen` 在 `127.0.0.1`，校验 `Host` 头，防 DNS rebinding；
-- `state` 防 CSRF 且一次性；PKCE S256 把授权码绑死在本客户端；
-- 授权码一次性、60 秒过期；token 只经 POST body 与内存传递，不进 URL、不进日志；
-- 密码只在一次请求中透传给官方接口，不落盘；
-- 凭证存 `~/.config/pwish/config.json`，权限 `0600`。
+- `state` 一次性、随机 22 位；**二维码、二维码轮询、密码登录、token 回传四个接口都必须带匹配的
+  `state`**，本机其他进程无法凭空轮询登录结果；`/health` 不回显 `state`；
+- 授权码一次性、60 秒过期；`token` 走 POST body，登录完成后再以 `Authorization` 头发请求；
+- 密码只在一次请求里透传给官方接口，不落盘；
+- 凭证存 `~/.config/pwish/config.json`，目录 `0700`、文件 `0600`（先写临时文件再 rename，避免 0644 窗口期）；
+- 结果地址只允许 `*.aliyuncs.com` / `*.aoscdn.com` / `*.picwish.cn` 的 https 链接，
+  上传授权域名必须是阿里云 OSS，避免服务端返回的地址把请求带到别处。
 
 环境变量：
 
@@ -170,7 +173,8 @@ CLI 对会员、算粒、免费额度的处理是「先看再跑、跑完回读�
 
 - `pwish quota` 一次看全：账号身份（免费 / 会员 + 到期 + 算粒）、各生图模型免费次数、
   设计任务（套图 / 详情图 / AI 图片编辑）、图片工具（抠图 / 变清晰 / 高清修复 / 图像扩展 /
-  图片翻译 / 换背景 / 去水印 / 去杂物 / 上色 / 格式转换）。有「今日已用」计数的项目会一并显示。
+  图片翻译 / 去褶皱 / 幽灵模特 / 平铺图 / 换背景 / 去水印 / 去杂物 / 上色 / 格式转换）。
+  只显示「当前计数」，不显示已用量（该字段语义未确认）。
 - **生成前预检**：`gen` / `suite` / 各图片工具在提交前查一次额度。目标额度为 0 时直接拦下并给出可选项，
   例如 `模型 gemini-3：免费次数已用完，可换用还有额度的模型：jimeng-5-flash(3)、gemini-3.1(1)`。
 - **跑完回读**：任务结束会打印一行额度，并说明本次到底有没有扣：
@@ -241,9 +245,14 @@ pwish download <id> [-o 目录]           # 同上，三种 id 都可重新下�
 pwish queue
 ```
 
-全局开关：`--json`（机器可读）、`-o/--out`（输出目录，默认 `out/`）、`--version`（版本号）。
+全局开关：`--json`（机器可读）、`-o/--out`（输出目录，默认 `out/`）、`--version`（版本号）、
+`--quiet`（只输出结果行）、`--dry-run`（预估消耗，不上传不建任务）、`--force`（跳过额度预检）。
 
-`--mode` 支持 `economy`（默认）与 `stable`；**`stable` 参数会正确下发但尚未实测**出图效果与计费差异。
+命令别名：`me`=whoami、`credits`=quota、`draw`/`create`=gen、`taotu`=suite、`xiangqing`=detail、
+`ls`=history、`dl`=download。
+
+`--mode` 支持 `economy`（默认）与 `stable`。**只有 `nano-banana` 与 `gpt-image-2` 两个模型族会把
+`pattern` 下发给服务端**，其它模型族该参数无效；`stable` 的出图效果与计费差异尚未实测。
 
 ## 例子
 
@@ -382,7 +391,8 @@ pwish skill --install
 - **拼图同样是前端合成**：`product-collage-maker` 页面里没有建任务接口（只有 `vips/task/deduct`
   的计费埋点），拼接在浏览器 canvas 完成；零依赖约束下 CLI 不做图像合成。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
-- **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
+- **`--mode stable` 未实测**：且只有 `nano-banana` / `gpt-image-2` 两族会下发 `pattern`，
+  其余模型传了也没用。
 - **换背景需要提示词**：`pwish bg` 先用抠图得到透明底，再调背景生成；一次返回 1-4 张候选。
 - **去杂物需要蒙版**：`pwish erase` 的 `--mask` 是标注擦除区域的图，CLI 不做画布交互。
 - **上传单文件上限 20MB**（CLI 侧保护）。实际站点限制未逐一验证。
@@ -390,7 +400,8 @@ pwish skill --install
 **产品与环境限制**：
 
 - 免费额度生成的图片**带水印**（URL/文件名含 `-wm_`）；去水印需按站点规则付费。
-- 结果图片 URL 是签名链接（约 2 小时），过期需用 `pwish download` 重新拉（会自动重新查询拿新签名）。
+- 结果图片 URL 是签名链接（约 2 小时），过期用 `pwish download` 重新拉：它会重新查询任务，
+  拿到服务端当时返回的最新地址；CLI 本身不做签名计算。
 - 多图上传走 3 路并发（实测 2 张图从 2.6s 降到 0.5s），返回顺序仍与入参一致；
   同一次命令里重复传同一文件只会真上传一次（按「前缀+路径+大小+mtime」记忆）。
 - `--dry-run` 只读一次额度就返回，不做预检拦截；报告里会提示额度不够时正式执行会被拦下。

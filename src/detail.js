@@ -1,5 +1,4 @@
 import { dimensionFor, SIZE_TO_QUALITY, SUITE_SITES, resolveModel } from "./models.js";
-import { uploadFiles } from "./upload.js";
 import { pollTask, createConversation } from "./tasks.js";
 import { suiteImagesOf } from "./suite.js";
 
@@ -43,9 +42,7 @@ export async function planDetailPrompts(
   const res = await client.request("tasks/login/suite/prompt", { method: "POST", body, timeout: 90_000 });
   const taskId = res.data?.task_id;
   if (!taskId) throw new Error(`详情图提示词任务创建失败：${JSON.stringify(res.data).slice(0, 200)}`);
-  const data = await pollTask(
-    client,
-    async () => (await client.request(`tasks/login/suite/prompt/${taskId}`, { timeout: 60_000 })).data,
+  const data = await pollTask(async () => (await client.request(`tasks/login/suite/prompt/${taskId}`, { timeout: 60_000 })).data,
     { timeoutMs, intervalMs: 2500 },
   );
   return { taskId, prompts: data.prompts || {}, raw: data };
@@ -102,9 +99,7 @@ export async function generateDetail(
   const taskId = res.data?.task_id;
   if (!taskId) throw new Error(`详情图任务创建失败：${JSON.stringify(res.data).slice(0, 200)}`);
 
-  const data = await pollTask(
-    client,
-    async () => (await client.request(`tasks/login/suite/${taskId}`, { timeout: 60_000 })).data,
+  const data = await pollTask(async () => (await client.request(`tasks/login/suite/${taskId}`, { timeout: 60_000 })).data,
     { timeoutMs, intervalMs: 4000, onProgress: (p) => onProgress?.({ ...p, taskId }) },
   );
   return { conversationId: cid, taskId, raw: data };
@@ -115,4 +110,3 @@ export function detailImagesOf(data) {
   return suiteImagesOf(data);
 }
 
-export { uploadFiles };

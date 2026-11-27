@@ -164,22 +164,35 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
         return;
       }
 
-      // 微信二维码
+      // 微信二维码：state 必须匹配，否则别的本机进程拿不到二维码轮询入口
       if (req.method === "POST" && url.pathname === "/api/qrcode") {
+        const body = await readJsonBody(req);
+        if (body.state !== state) {
+          sendJson(400, { message: "state 不匹配" });
+          return;
+        }
         if (qrCache && autoRefreshQr && Date.now() - qrCache.at < 120_000) {
           sendJson(200, { hashKey: qrCache.hashKey, qrUrl: qrCache.qrUrl });
           return;
         }
         const qr = await requestWechatQr();
-        qrCache = { ...qr, at: Date.now() };
+        qrCache = { ...qr, at: Date.now(), state };
         sendJson(200, qr);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/qrcode/poll") {
         const body = await readJsonBody(req);
+        if (body.state !== state) {
+          sendJson(400, { message: "state 不匹配" });
+          return;
+        }
         if (!body.hashKey) {
           sendJson(400, { message: "缺少 hashKey" });
+          return;
+        }
+        if (qrCache?.state && qrCache.state !== state) {
+          sendJson(400, { message: "二维码不属于当前登录会话" });
           return;
         }
         try {
@@ -198,6 +211,10 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
       // 密码登录
       if (req.method === "POST" && url.pathname === "/api/login/password") {
         const body = await readJsonBody(req);
+        if (body.state !== state) {
+          sendJson(400, { message: "state 不匹配" });
+          return;
+        }
         try {
           const result = await loginWithPassword({ account: String(body.account || "").trim(), password: String(body.password || "") });
           sendJson(200, { token: result.token });
@@ -245,7 +262,7 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
 
       // 健康检查（供测试与调试）
       if (req.method === "GET" && url.pathname === "/health") {
-        sendJson(200, { ok: true, state });
+        sendJson(200, { ok: true }); // 不回显 state：本机其他进程不该拿到登录事务标识
         return;
       }
 

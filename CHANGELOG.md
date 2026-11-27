@@ -5,6 +5,53 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-27
+
+全面复核（含 Codex 独立审查）后的加固批次。测试 113 → 123。
+
+### Security
+
+- **登录事务隔离**：`/api/qrcode`、`/api/qrcode/poll`、`/api/login/password`、`/session` 四个接口
+  现在都必须带匹配的 `state`，二维码缓存按 `state` 绑定；`/health` 不再回显 `state`。
+  此前本机其他进程可以凭空轮询二维码接口拿到 token
+- **结果地址白名单**：下载与换背景只允许 `https` + `*.aliyuncs.com` / `*.aoscdn.com` / `*.picwish.cn`；
+  上传授权返回的 OSS 域名必须是阿里云，防止服务端返回的地址把请求带到任意主机
+- **配置写入**：先写 `0600` 临时文件再 rename，消除 0644 窗口期；环境变量覆盖值不再被固化进配置文件
+
+### Fixed
+
+- `pollTask` 先判断 `state<0` 再判断 `progress===100`，失败任务不再被当成成功
+- HTTP 401/5xx 不再被 body 里的 `status:200` 掩盖
+- 响应体读取纳入超时保护（此前只限制到首字节）
+- 拼错的选项直接报错（`--dryrun` 以前会静默变成真跑，可能白扣额度）
+- `--force=false` / `--dry-run=no` 正确解析为关闭；`--prompt=a=b` 不再被截断；
+  `--image=` 与 `-i` 混用时不会把字符串拆成字符
+- `-n 1.5` / `-n 0` / `-n 11` 在本地报错，不再让服务端兜底
+- `batch --json` 输出可被 `JSON.parse`（逐条进度改走 stderr）
+- `batch gen --no-download` 按 URL 判定成功，不再全部记为失败
+- `batch whitebg` 明确拒绝（每张图需配一张参考图，目录批量语义不成立）
+- `pwish task` 有查不到的 id 时退出码 1（文本与 `--json` 一致）
+- 未登录退出码统一为 3（此前 `NO_TOKEN` 落进通用分支返回 2），新增退出码契约测试
+- `quota` 文本表补上去褶皱 / 幽灵模特 / 平铺图
+- `--dry-run --json` 输出结构化 JSON（`{dryRun, action, steps, remain, enough}`）
+- 上传一张失败即中止后续，不再继续烧带宽
+
+### Removed
+
+- `pwish login --paste`（剪贴板读 token）整体移除：与「自建登录页走官方 OAuth」的既定交互冲突，
+  CI 场景用 `--token`
+
+### Docs
+
+- 测试数量、`--mode stable`（只有 `nano-banana` / `gpt-image-2` 会下发 `pattern`）、
+  「今日已用」（并未显示）、`download` 重下机制（重新查询而非本地签名）等描述按实现纠正
+- 新增命令别名与全局开关说明；README 安全设计章节重写
+
+### Chore
+
+- CI 增加 `npm run format:check`
+- 测试临时目录补清理；`auth-server` 补 2 条 state 隔离用例
+
 ## [0.15.2] - 2026-11-27
 
 ### Research → 文档纠正

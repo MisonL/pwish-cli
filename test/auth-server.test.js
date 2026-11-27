@@ -170,3 +170,35 @@ test("/api/* 异常时返回 JSON 而非 HTML", async () => {
   assert.ok(!text.startsWith("<!doctype"), "API 错误不应返回 HTML");
   await auth.close();
 });
+
+test("登录相关接口必须带匹配的 state，本机其他进程不能凭空轮询二维码", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000 });
+
+  const noState = await fetch(`${auth.origin}/api/qrcode`, { method: "POST" });
+  assert.equal(noState.status, 400);
+
+  const wrongState = await fetch(`${auth.origin}/api/qrcode/poll`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hashKey: "whatever", state: "wrong" }),
+  });
+  assert.equal(wrongState.status, 400);
+
+  const badPassword = await fetch(`${auth.origin}/api/login/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ account: "a", password: "b" }),
+  });
+  assert.equal(badPassword.status, 400);
+
+  await auth.close();
+});
+
+test("/health 不回显 state", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000 });
+  const res = await fetch(`${auth.origin}/health`);
+  const body = await res.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.state, undefined);
+  await auth.close();
+});

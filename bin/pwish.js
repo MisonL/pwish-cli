@@ -10,7 +10,8 @@ try {
   if (err instanceof UserError) {
     process.stderr.write(`\u001b[31m✗ ${err.message}\u001b[0m\n`);
     if (err.hint) process.stderr.write(`${err.hint}\n`);
-    process.exitCode = 2;
+    // 未登录给独立的退出码，脚本可以据此区分「没登录」和「参数写错」
+    process.exitCode = err.code === "NO_TOKEN" ? 3 : 2;
   } else if (err instanceof ApiError) {
     process.stderr.write(`\u001b[31m✗ ${err.message}\u001b[0m\n`);
     if (process.env.PWISH_DEBUG) process.stderr.write(`${JSON.stringify(err.payload, null, 2)}\n`);

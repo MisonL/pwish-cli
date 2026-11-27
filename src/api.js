@@ -73,6 +73,7 @@ export function createClient(overrides = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     let res;
+    let text;
     try {
       res = await fetch(url, {
         method,
@@ -84,6 +85,8 @@ export function createClient(overrides = {}) {
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
+      // 响应体读取也在超时保护内：只限制首字节会让卡住的 body 无限期挂起
+      text = await res.text();
     } catch (err) {
       throw new ApiError(
         err.name === "AbortError" ? `请求超时：${path}` : `网络请求失败：${err.message}`,
@@ -92,8 +95,6 @@ export function createClient(overrides = {}) {
     } finally {
       clearTimeout(timer);
     }
-
-    const text = await res.text();
     let json;
     try {
       json = JSON.parse(text);
@@ -104,7 +105,8 @@ export function createClient(overrides = {}) {
       });
     }
 
-    const status = Number(json.status ?? res.status);
+    // HTTP 层失败不能被 body 里的 status:200 掩盖（例如网关回 401 带业务体）
+    const status = res.status >= 400 ? res.status : Number(json.status ?? res.status);
     if (status !== 200) {
       const { message, code } = describeApiError(status, json);
       throw new ApiError(message, { status: res.status, code, payload: json });
