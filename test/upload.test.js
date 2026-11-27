@@ -55,3 +55,50 @@ test("ossV1Signature 支持空 body（contentMd5 默认空串）", () => {
   assert.equal(typeof sig, "string");
   assert.ok(sig.length > 0);
 });
+
+test("同一文件在一次进程内只上传一次，不同前缀各自独立", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { uploadFile } = await import("../src/upload.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-up-"));
+  const file = path.join(dir, "a.png");
+  fs.writeFileSync(file, "fake-png-bytes");
+
+  let authCalls = 0;
+  let putCalls = 0;
+  const client = {
+    request: async () => {
+      authCalls += 1;
+      return {
+        data: {
+          bucket: "b",
+          endpoint: "e.test",
+          objects: { "a.png": "k/a.png" },
+          credential: { access_key_id: "id", access_key_secret: "sec", security_token: "tok" },
+        },
+      };
+    },
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    putCalls += 1;
+    return { ok: true, text: async () => JSON.stringify({ data: { resource_id: "rid-1" } }) };
+  };
+  try {
+    const [first, second] = await Promise.all([
+      uploadFile(client, file),
+      uploadFile(client, file),
+    ]);
+    assert.equal(first.resourceId, "rid-1");
+    assert.equal(second.resourceId, "rid-1");
+    assert.equal(authCalls, 1, "并发两次也只申请一次授权");
+    assert.equal(putCalls, 1, "只 PUT 一次");
+
+    await uploadFile(client, file, "pub/tasks/input/image_translate");
+    assert.equal(authCalls, 2, "不同前缀不复用");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

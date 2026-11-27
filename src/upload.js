@@ -31,12 +31,34 @@ export function ossV1Signature({ verb, contentMd5 = "", mime, date, ossHeaders, 
  * 上传本地文件到 picwish 的 OSS，返回 resource_id（后续作为 source_resource_ids 传给生成接口）。
  * 流程：POST authorizations/oss 拿 STS → PUT 到 OSS（带 x-oss-callback，由服务端回调登记资源）。
  */
+/**
+ * 同一次命令内重复上传同一文件是浪费（套图/详情图很容易把同一张图传两遍）。
+ * 这里按「前缀 + 绝对路径 + 大小 + mtime」做进程内记忆，跨进程不复用——
+ * resource_id 的有效期由服务端决定，跨进程复用有拿到已失效资源的风险。
+ */
+const uploadMemo = new Map();
+
 export async function uploadFile(client, file, prefix = "pub/tasks/input/llm_chats") {
   const abs = path.resolve(file);
   const stat = fs.statSync(abs);
   if (!stat.isFile()) throw new Error(`不是文件：${abs}`);
   if (stat.size > 20 * 1024 * 1024) throw new Error(`文件超过 20MB：${abs}`);
 
+  const memoKey = `${prefix}|${abs}|${stat.size}|${stat.mtimeMs}`;
+  const cached = uploadMemo.get(memoKey);
+  if (cached) return cached;
+
+  const pending = performUpload(client, abs, prefix);
+  uploadMemo.set(memoKey, pending);
+  try {
+    return await pending;
+  } catch (err) {
+    uploadMemo.delete(memoKey); // 失败不缓存，下一次重试仍会真的上传
+    throw err;
+  }
+}
+
+async function performUpload(client, abs, prefix) {
   const name = path.basename(abs);
   const body = fs.readFileSync(abs);
   const mime = mimeOf(abs);

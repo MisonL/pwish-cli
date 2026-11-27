@@ -220,6 +220,25 @@ function quotaCell(remain) {
   return remain > 0 ? `${green}${text}${reset}` : `${yellow}${text}${reset}`;
 }
 
+/** 只读额度快照（dry-run 用，不做预检判定、不打印告警）。 */
+async function readQuota(client) {
+  try {
+    return summarizeQuota(await freeCounts(client));
+  } catch {
+    return null;
+  }
+}
+
+/** dry-run 时统一打印「打算做什么 + 要花几次额度」，不碰建任务接口。 */
+function showPlan({ action, steps, quota, kind, key }) {
+  const remain = pickRemain(quota, kind, key);
+  say(`${cyan}计划${reset} ${action}`);
+  say(`  预计消耗：${steps} 次${remain === undefined ? "" : `（当前剩余 ${remain} 次）`}`);
+  if (remain !== undefined && steps > remain) say(`  ${yellow}! 额度不够，实际执行会被预检拦下${reset}`);
+  say(`  ${dim}（--dry-run 不上传图片、不建任务；去掉该参数才真正执行）${reset}`);
+  return 0;
+}
+
 /** 生成/处理前查一次额度，给出可读的预检结论。 */
 async function checkQuota(client, { kind, key, label, force }) {
   let quota;
@@ -476,6 +495,10 @@ async function cmdTool(name, args) {
   }
   const client = clientFromConfig(args.flags);
 
+  if (args.flags["dry-run"]) {
+    return showPlan({ action: `${tool.label} ${path.basename(image)}`, steps: 1, quota: await readQuota(client), kind: "tool", key: name });
+  }
+
   const before = await checkQuota(client, {
     kind: "tool",
     key: name,
@@ -544,6 +567,15 @@ async function cmdBatch(args) {
   if (!inputs.length) throw new UserError("没有找到可处理的图片", "NO_INPUT");
 
   const client = clientFromConfig(args.flags);
+  if (args.flags["dry-run"]) {
+    return showPlan({
+      action: `批量${tool.label}，共 ${inputs.length} 张`,
+      steps: inputs.length,
+      quota: await readQuota(client),
+      kind: "tool",
+      key: name,
+    });
+  }
   const quota = await checkQuota(client, {
     kind: "tool",
     key: name,
@@ -694,6 +726,15 @@ async function cmdGenBatch(args) {
   });
 
   const client = clientFromConfig(args.flags);
+  if (args.flags["dry-run"]) {
+    return showPlan({
+      action: `批量生图，${inputs.length} 张 × ${count} 次（模型 ${model.key}）`,
+      steps: inputs.length * count,
+      quota: await readQuota(client),
+      kind: "model",
+      key: model.key,
+    });
+  }
   const quota = await checkQuota(client, { kind: "model", key: model.key, label: `模型 ${model.key}：`, force: Boolean(args.flags.force) });
   const remain = quota ? modelRemain(quota, model.key) : undefined;
   if (remain !== undefined && inputs.length * count > remain && !args.flags.force) {
@@ -782,6 +823,16 @@ async function cmdGen(args) {
 
   if (!["economy", "stable"].includes(pattern)) throw new UserError("--mode 只能是 economy 或 stable");
   if (!RATIOS.includes(ratio)) throw new UserError(`--ratio 不支持 ${ratio}，可用：${RATIOS.join(", ")}`);
+
+  if (args.flags["dry-run"]) {
+    return showPlan({
+      action: `调用模型 ${model.key} 生成 ${count} 张（比例 ${ratio}，${sizeName}，${pattern}）`,
+      steps: count,
+      quota: await readQuota(client),
+      kind: "model",
+      key: model.key,
+    });
+  }
 
   const before = await checkQuota(client, {
     kind: "model",
@@ -898,6 +949,16 @@ async function cmdSuite(args) {
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
 
+  if (args.flags["dry-run"]) {
+    return showPlan({
+      action: `套图 ${sceneList.length} 个场景（站点 ${site}）`,
+      steps: sceneList.length,
+      quota: await readQuota(client),
+      kind: "design",
+      key: "suite",
+    });
+  }
+
   const before = await checkQuota(client, {
     kind: "design",
     key: "suite",
@@ -1012,6 +1073,17 @@ async function cmdDetail(args) {
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
+
+
+  if (args.flags["dry-run"]) {
+    return showPlan({
+      action: `详情图 ${requested.length} 个场景`,
+      steps: requested.length,
+      quota: await readQuota(client),
+      kind: "design",
+      key: "detail",
+    });
+  }
 
   const before = await checkQuota(client, { kind: "design", key: "detail", label: "详情图：", force: Boolean(args.flags.force) });
 
@@ -1262,6 +1334,7 @@ ${cyan}其他
   全局：--json 机器可读输出   --out/-o 输出目录（默认 out/，可用 PWISH_OUT 覆盖）
         --force 跳过额度预检（账号还有会员权益但 CLI 判为 0 时用）
         --quiet 只输出结果行，不打印进度（脚本用；也可用 PWISH_QUIET=1）
+        --dry-run 只预估消耗与计划，不上传、不建任务
   别名：me=whoami  credits=quota  draw/create=gen  taotu=suite  xiangqing=detail  ls=history  dl=download
 
 ${dim}接口来自 picwish 网页版同源 API，生成图片带水印（免费额度），商用请按站点规则升级。

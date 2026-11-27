@@ -35,6 +35,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
 | **图片工具** | 抠图、变清晰、高清修复、商品还原/白底、图像扩展、图片翻译、AI 换背景、去水印、去杂物、上色、格式转换 |
 | **批量处理** | 对一个目录里的图片批量跑同一个工具或批量生图，逐张报告成败 |
+| **成本预估** | `--dry-run` 只报告计划与预计消耗，不上传、不建任务、不扣额度 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
 
@@ -219,6 +220,10 @@ pwish expand ./photo.jpg --to 16:9    # 图像扩展：自动算四边外扩量
 pwish translate ./poster.jpg --to ENG # 图片翻译：保留版式替换文字
 pwish batch cutout ./photos -o out/cut   # 批量抠图（目录里所有图片）
 pwish batch gen ./photos --prompt "白底商品图"   # 批量生图
+
+# 先看会花多少，确认后再跑（不上传、不建任务）
+pwish suite -i ./p.jpg --selling "保温杯" --dry-run
+pwish batch cutout ./photos --dry-run
 pwish bg ./product.jpg --prompt "白色大理石台面"
 pwish dewatermark ./photo.jpg
 pwish erase ./photo.jpg --mask ./mask.png [--strength 3]
@@ -370,6 +375,8 @@ pwish skill --install
 
 - 免费额度生成的图片**带水印**（URL/文件名含 `-wm_`）；去水印需按站点规则付费。
 - 结果图片 URL 是签名链接（约 2 小时），过期需用 `pwish download` 重新拉（会自动重新查询拿新签名）。
-- 多图上传走 3 路并发（实测 2 张图从 2.6s 降到 0.5s），返回顺序仍与入参一致。
+- 多图上传走 3 路并发（实测 2 张图从 2.6s 降到 0.5s），返回顺序仍与入参一致；
+  同一次命令里重复传同一文件只会真上传一次（按「前缀+路径+大小+mtime」记忆）。
+- `--dry-run` 只读一次额度就返回，不做预检拦截；报告里会提示额度不够时正式执行会被拦下。
 - 生成任务的轮询容忍偶发查询失败：连续 5 次才放弃，单次网络抖动不会让几分钟的任务作废。
 - 接口无公开文档，字段以实测为准；站点改版可能导致失效，`src/models.js` 是模型/比例/场景的单一改点。
