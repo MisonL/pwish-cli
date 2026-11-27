@@ -144,6 +144,6 @@ export function preflight(quota, { kind, modelKey }) {
     return { level: "block", message: `免费次数已用完，${hint}${creditHint}`, remain: 0 };
   }
 
-  const extra = hasCredits(quota) || quota.membership.isVip ? "；账号还有会员权益，可加 --force 继续" : "";
+  const extra = hasCredits(quota) || quota.membership.isVip ? "；账号还有会员权益" : "";
   return { level: "block", message: `免费次数已用完（是否回补以站点为准）${extra}`, remain: 0 };
 }

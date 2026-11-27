@@ -228,24 +228,46 @@ async function checkQuota(client, { kind, key, label, force }) {
   }
   const result = preflight(quota, { kind, modelKey: key });
   if (result.level === "block" && !force) {
-    throw new UserError(`${label}${result.message}`, "QUOTA_EXCEEDED");
+    throw new UserError(`${label}${result.message}\n若确认账号仍有权益，可加 --force 跳过预检`, "QUOTA_EXCEEDED");
   }
   if (result.level === "block") log(`${yellow}! ${label}${result.message}（--force 已跳过预检）${reset}`);
   return quota;
 }
 
-/** 任务结束后回读额度，给一行「还剩多少」的反馈。 */
-async function quotaAfterRun(client, { kind, key, label }) {
+/**
+ * 任务结束后回读额度。
+ *
+ * 站点计数并不都随调用递减（抠图、格式转换实测始终不变），所以这里做前后对比：
+ * 只有在数值变化时才说「本次消耗 N」，否则明确说明计数没动，避免让人以为额度没被扣。
+ */
+async function quotaAfterRun(client, { kind, key, label, before }) {
   try {
     const quota = summarizeQuota(await freeCounts(client));
     const remain =
       kind === "tool" ? toolRemainOf(quota, key) : kind === "model" ? modelRemain(quota, key) : quota.designer[key];
     if (remain === undefined) return null;
-    log(`${dim}额度：${label} 免费剩余 ${remain} 次${reset}`);
-    return { remain };
+    const prev = pickRemain(before, kind, key);
+    const note = describeQuotaChange(prev, remain);
+    log(`${dim}额度：${label} 当前计数 ${remain} 次${note}${reset}`);
+    return { remain, before: prev };
   } catch {
     return null;
   }
+}
+
+/** 额度前后对比的说明文字：只有真的变了才说「消耗 N 次」。 */
+export function describeQuotaChange(prev, remain) {
+  if (typeof prev !== "number" || typeof remain !== "number") return "";
+  if (prev === remain) return "（站点计数未变化）";
+  const diff = prev - remain;
+  return `（本次 ${diff > 0 ? "消耗" : "增加"} ${Math.abs(diff)}）`;
+}
+
+function pickRemain(quota, kind, key) {
+  if (!quota) return undefined;
+  if (kind === "tool") return toolRemainOf(quota, key);
+  if (kind === "model") return modelRemain(quota, key);
+  return quota.designer[key];
 }
 
 async function cmdQuota(args) {
@@ -429,7 +451,7 @@ async function cmdTool(name, args) {
   const opts = toolOptions(name, args, image);
   const client = clientFromConfig(args.flags);
 
-  await checkQuota(client, {
+  const before = await checkQuota(client, {
     kind: "tool",
     key: name,
     label: `${tool.label}：`,
@@ -445,7 +467,7 @@ async function cmdTool(name, args) {
   say(`${green}✓ ${tool.label}完成${taskId ? `  任务: ${taskId}` : ""}`);
   for (const d of saved) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   if (args.flags["no-download"]) for (const u of urls) say(`  ${u}`);
-  await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
+  await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label, before });
   return 0;
 }
 
@@ -555,7 +577,7 @@ async function cmdBatch(args) {
       `${failed ? `  ${yellow}失败 ${failed}${reset}` : ""}${skipped ? `  ${yellow}跳过 ${skipped}${reset}` : ""}`,
   );
   for (const r of done.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
-  if (ok) await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label });
+  if (ok) await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label, before: quota });
   return failed || skipped ? 1 : 0;
 }
 
@@ -712,7 +734,7 @@ async function cmdGenBatch(args) {
       `  会话: ${conversationId}`,
   );
   for (const r of done.filter((x) => !x.ok)) say(`  ${dim}${r.file}${reset}`);
-  if (ok) await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key });
+  if (ok) await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key, before: quota });
   return failed || skipped ? 1 : 0;
 }
 
@@ -736,7 +758,7 @@ async function cmdGen(args) {
   if (!["economy", "stable"].includes(pattern)) throw new UserError("--mode 只能是 economy 或 stable");
   if (!RATIOS.includes(ratio)) throw new UserError(`--ratio 不支持 ${ratio}，可用：${RATIOS.join(", ")}`);
 
-  await checkQuota(client, {
+  const before = await checkQuota(client, {
     kind: "model",
     key: model.key,
     label: `模型 ${model.key}：`,
@@ -822,7 +844,7 @@ async function cmdGen(args) {
 
   say(`${green}✓ 完成 ${okCount}/${results.length} 张  会话: ${conversations}`);
   for (const d of downloaded) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
-  await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key });
+  await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key, before });
   for (const r of results.filter((x) => !x.ok)) say(`  ${yellow}! ${r.taskId} 失败: ${r.error || "无图片返回"}`);
   if (args.flags["no-download"]) {
     for (const r of results) for (const img of r.images) say(`  ${img.url}`);
@@ -851,7 +873,7 @@ async function cmdSuite(args) {
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
 
-  await checkQuota(client, {
+  const before = await checkQuota(client, {
     kind: "design",
     key: "suite",
     label: "套图：",
@@ -935,7 +957,7 @@ async function cmdSuite(args) {
 
   say(`${green}✓ 套图完成 ${total} 张  会话: ${out.conversationId}`);
   for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
-  await quotaAfterRun(client, { kind: "design", key: "suite", label: "套图" });
+  await quotaAfterRun(client, { kind: "design", key: "suite", label: "套图", before });
   return 0;
 }
 
@@ -966,7 +988,7 @@ async function cmdDetail(args) {
   const timeoutMs = Number(args.flags.timeout || 900) * 1000;
   const client = clientFromConfig(args.flags);
 
-  await checkQuota(client, { kind: "design", key: "detail", label: "详情图：", force: Boolean(args.flags.force) });
+  const before = await checkQuota(client, { kind: "design", key: "detail", label: "详情图：", force: Boolean(args.flags.force) });
 
   log(`${dim}上传 ${images.length} 张商品图…`);
   const uploaded = await uploadFiles(client, images);
@@ -1042,7 +1064,7 @@ async function cmdDetail(args) {
 
   say(`${green}✓ 详情图完成 ${total} 张  会话: ${out.conversationId}`);
   for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
-  await quotaAfterRun(client, { kind: "design", key: "detail", label: "详情图" });
+  await quotaAfterRun(client, { kind: "design", key: "detail", label: "详情图", before });
   return 0;
 }
 

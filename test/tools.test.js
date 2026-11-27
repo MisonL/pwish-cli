@@ -105,3 +105,8 @@ test("translateImage 拒绝源语言与目标语言相同", async () => {
   const client = { request: () => assert.fail("不应发起请求") };
   await assert.rejects(() => translateImage(client, { file: "x.png", from: "ENG", to: "ENG" }), /相同/);
 });
+
+test("translateImage 本地拦截 auto 源语言（服务端会 task failed）", async () => {
+  const client = { request: () => assert.fail("不应发起请求") };
+  await assert.rejects(() => translateImage(client, { file: "x.png", from: "auto", to: "ENG" }), /不支持自动识别/);
+});

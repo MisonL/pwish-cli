@@ -151,6 +151,10 @@ export async function translateImage(client, { file, from = "CHS", to = "ENG", t
       throw new Error(`不支持的${label}语言：${value}（可用：${TRANSLATE_LANGS.join(" / ")}）`);
     }
   }
+  // 服务端对 auto 会直接返回 task failed（实测），本地拦掉，别白跑一次
+  if (source === "auto") {
+    throw new Error("服务端不支持自动识别源语言，请按图片实际语种传 --from（如 CHS / ENG）");
+  }
   if (source === target) throw new Error("源语言与目标语言相同，翻译没有意义");
 
   const up = await uploadFile(client, file, "pub/tasks/input/image_translate");
