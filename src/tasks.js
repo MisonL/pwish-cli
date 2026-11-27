@@ -3,12 +3,32 @@ import path from "node:path";
 import { ApiError } from "./api.js";
 
 /** 轮询直到任务完成；返回后端最终 data。 */
-export async function pollTask(client, fetcher, { timeoutMs = 300_000, intervalMs = 3000, onProgress } = {}) {
+/**
+ * 轮询任务直到完成。
+ *
+ * 生成任务动辄几分钟，期间偶发的网络抖动不该让整个任务作废：
+ * 查询抛错会先重试，只有连续 `maxConsecutiveErrors` 次失败才放弃。
+ */
+export async function pollTask(
+  client,
+  fetcher,
+  { timeoutMs = 300_000, intervalMs = 3000, onProgress, maxConsecutiveErrors = 5 } = {},
+) {
   const started = Date.now();
   let last = null;
   let missCount = 0;
+  let errorCount = 0;
   while (Date.now() - started < timeoutMs) {
-    const data = await fetcher();
+    let data;
+    try {
+      data = await fetcher();
+      errorCount = 0;
+    } catch (err) {
+      errorCount += 1;
+      if (errorCount >= maxConsecutiveErrors) throw err;
+      await new Promise((r) => setTimeout(r, intervalMs));
+      continue;
+    }
     if (!data) {
       missCount += 1;
       if (missCount > 10) throw new Error("任务查询连续失败，已放弃");
@@ -17,7 +37,7 @@ export async function pollTask(client, fetcher, { timeoutMs = 300_000, intervalM
       last = data;
       const state = Number(data.state ?? data.status ?? 0);
       const progress = Number(data.progress ?? 0);
-      onProgress?.({ state, progress, data });
+      onProgress?.({ state, progress, data, elapsedMs: Date.now() - started });
       if (state === 1 || progress === 100) return data;
       if (state < 0) {
         throw new Error(`任务失败（state=${state}）${data.error ? `：${data.error}` : ""}`);

@@ -103,10 +103,17 @@ export async function uploadFile(client, file, prefix = "pub/tasks/input/llm_cha
   return { resourceId: info.resource_id, key, url: info.url, width: info.width, height: info.height, name };
 }
 
-export async function uploadFiles(client, files, prefix) {
-  const out = [];
-  for (const f of files) {
-    out.push(await uploadFile(client, f, prefix));
-  }
+/** 批量上传：默认 3 路并发，保持返回顺序与入参一致。 */
+export async function uploadFiles(client, files, prefix, { concurrency = 3 } = {}) {
+  const out = new Array(files.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < files.length) {
+      const index = cursor++;
+      out[index] = await uploadFile(client, files[index], prefix);
+    }
+  };
+  const lanes = Math.max(1, Math.min(concurrency, files.length));
+  await Promise.all(Array.from({ length: lanes }, worker));
   return out;
 }
