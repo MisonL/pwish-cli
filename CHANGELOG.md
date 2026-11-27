@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-27
+
+### Research → 文档纠正
+
+抓了试衣页（`/virtual-try-on-clothes`）与拼图页（`/product-collage-maker`）的依赖树
+（420 + 202 个 chunk），结论修正了之前「找不到接口」的模糊说法：
+
+- **AI 试衣没有独立任务接口**：页面只是把用户导进 AI 设计师，计费项在设计师成本表里叫
+  `virtualTryOnOrArt`（会员 12 / 免费 5）。等价于「双图 gen」：人像 + 衣服，
+  用 `pwish gen "把第二张图的衣服穿到第一张图的人身上" -i person.jpg -i shirt.jpg`
+- **拼图是前端 canvas 合成**：页面里只有 `vips/task/deduct` 的计费埋点（`source: TypeVisualCollage`），
+  没有建任务端点；零依赖下 CLI 不做本地合成
+
+README / SKILL 已按这个结论改写，不再写「找不到服务端接口」这类含糊说法。
+
 ## [0.15.1] - 2026-11-27
 
 ### Fixed

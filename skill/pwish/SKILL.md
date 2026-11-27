@@ -166,6 +166,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **批量生图**：`pwish batch gen ./photos --prompt "白底商品图"` 给每张图各生成一张，整批共用一个会话。
   `--prompt-file` 每行对应一张（顺序按文件名排序），只写 1 行则会复用到所有图；条数对不上会直接报错。
   批量生图按「张数 × --n」核对模型额度。
+- **试衣**：没有独立命令，用双图 gen 代替——`pwish gen "把第二张图的衣服穿到第一张图的人身上"
+  -i ./person.jpg -i ./shirt.jpg`。这是站点自己的实现路径（计费项 `virtualTryOnOrArt`）。
+- **拼图**：站点是前端 canvas 合成，没有服务端接口，CLI 不做；需要排版时建议用 `pwish suite` 出图后自行拼接。
 - **幽灵模特 / 平铺图**：同一件衣服分别出「隐形人台」和「铺平」效果，底层是同一个外部编辑接口，
   用 `from` 和 `quality` 区分；`--ratio` 只接受站点画幅（1:1 / 3:4 / 4:3 / 16:9 等）。
 - **去褶皱**：`alpha` 是 0 以上数字，传布尔会被服务端拒（`must be equal or greater than 0`）。

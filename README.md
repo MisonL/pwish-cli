@@ -375,6 +375,12 @@ pwish skill --install
 - **AI 阴影未接入**：`tasks/login/ai-shadow` 参数已摸清（`bg_color` 必填，否则 `15557 Error color`），
   但单张模式建任务后 `task failed`、批量模式直接算粒不足，同样无法验证产出。
 - **商品还原需要 2 张图**：`pwish whitebg` 是站点后处理接口，服务端硬性校验 `exactly 2 source images`。
+- **AI 试衣没有独立接口**：`virtual-try-on-clothes` 页面是把用户导流进 AI 设计师，计费项叫
+  `virtualTryOnOrArt`（会员 12 / 免费 5）。也就是说它等价于「AI 设计师 + 两张参考图（人像 + 衣服）」，
+  用 `pwish gen "把第二张图的衣服穿到第一张图的人身上" -i ./person.jpg -i ./shirt.jpg` 走同一条路，
+  没有单独的 `tasks/*` 端点可接。
+- **拼图同样是前端合成**：`product-collage-maker` 页面里没有建任务接口（只有 `vips/task/deduct`
+  的计费埋点），拼接在浏览器 canvas 完成；零依赖约束下 CLI 不做图像合成。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
 - **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
 - **换背景需要提示词**：`pwish bg` 先用抠图得到透明底，再调背景生成；一次返回 1-4 张候选。
