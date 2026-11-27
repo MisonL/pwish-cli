@@ -391,7 +391,7 @@ function cmdSkill(args) {
   return 0;
 }
 
-const TOOLS = {
+export const TOOLS = {
   cutout: { label: "抠图去背景", run: removeBackground, ext: ".png" },
   upscale: { label: "变清晰", run: upscale, ext: ".jpg" },
   bg: { label: "AI 换背景", run: changeBackground, ext: ".jpg" },
@@ -1285,7 +1285,7 @@ function cmdLogout() {
   return 0;
 }
 
-function help() {
+export function help() {
   say(`pwish — 佐糖 AI 设计师命令行工具（picwish.cn/ai-design-create）
 
 ${cyan}登录
@@ -1321,6 +1321,9 @@ ${cyan}图片工具（一图一任务，直接出图）
   pwish dewatermark ./photo.jpg                   自动去水印
   pwish erase ./photo.jpg --mask ./mask.png [--strength 3]  去杂物/擦除
   pwish colorize ./bw-photo.jpg                   黑白照片上色
+  pwish wrinkle ./shirt.jpg                       去衣服褶皱
+  pwish mannequin ./shirt.jpg                     幽灵模特（服装 3D 图 / 隐形人台）
+  pwish flatlay ./shirt.jpg                       平铺图（俯拍铺平）
   pwish convert ./photo.png --format jpg          格式转换（jpg/png/webp/bmp/gif）
 
 ${cyan}批量处理（对目录里的图片跑同一个工具）

@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-27
+
+### Fixed
+
+- `pwish help` 漏掉了 `wrinkle / mannequin / flatlay` 三个新命令（0.15.0 里替换锚点没命中且没有断言）
+
+### Tests
+
+- 新增 `test/help.test.js`：遍历 `TOOLS` 断言每个工具在 help 里都有用法行，并检查
+  `--dry-run / --quiet / --force / --json` 四个全局开关（111 → 113）。以后新增工具漏写帮助会直接红
+
 ## [0.15.0] - 2026-11-27
 
 ### Added
