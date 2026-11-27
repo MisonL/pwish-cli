@@ -15,6 +15,8 @@ import {
   expandImage,
   translateImage,
   colorize,
+  removeWrinkle,
+  garmentModel,
   convertFormat,
   resultUrls,
 } from "./tools.js";
@@ -400,6 +402,9 @@ const TOOLS = {
   expand: { label: "图像扩展", run: expandImage, ext: ".png" },
   translate: { label: "图片翻译", run: translateImage, ext: ".jpg" },
   colorize: { label: "黑白上色", run: colorize, ext: ".png" },
+  wrinkle: { label: "去褶皱", run: removeWrinkle, ext: ".jpg" },
+  mannequin: { label: "幽灵模特", run: (client, opts) => garmentModel(client, { ...opts, mode: "mannequin" }), ext: ".png" },
+  flatlay: { label: "平铺图", run: (client, opts) => garmentModel(client, { ...opts, mode: "flatlay" }), ext: ".png" },
   convert: { label: "格式转换", run: convertFormat, ext: "" },
 };
 
@@ -436,6 +441,9 @@ function toolOptions(name, args, image) {
   if (name === "translate") {
     opts.from = String(args.flags.from || "CHS");
     opts.to = String(args.flags.to || "ENG");
+  }
+  if (name === "mannequin" || name === "flatlay") {
+    opts.ratio = args.flags.ratio || args.flags.r || "1:1";
   }
   if (name === "convert") {
     opts.format = String(args.flags.format || args.flags.f || "png").toLowerCase();
@@ -1379,6 +1387,9 @@ export async function main(argv) {
     case "expand":
     case "translate":
     case "colorize":
+    case "wrinkle":
+    case "mannequin":
+    case "flatlay":
     case "convert":
       return cmdTool(cmd, args);
     case "batch":

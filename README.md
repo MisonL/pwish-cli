@@ -33,7 +33,8 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **一句话出图** | 支持参考图、模型、比例、清晰度、张数与经济/稳定模式 |
 | **电商套图** | 商品图 → AI 写场景提示词 → 白底/卖点/材质/模特成套出图 |
 | **电商详情图** | 商品图 + 卖点 → 海报/亮点/卖点/细节/生活/多场景/尺寸模块图 |
-| **图片工具** | 抠图、变清晰、高清修复、商品还原/白底、图像扩展、图片翻译、AI 换背景、去水印、去杂物、上色、格式转换 |
+| **图片工具** | 抠图、变清晰、高清修复、商品还原/白底、图像扩展、图片翻译、AI 换背景、去水印、去杂物、上色、去褶皱、格式转换 |
+| **服装图** | 幽灵模特（服装 3D 图 / 隐形人台）、平铺图（俯拍铺平） |
 | **批量处理** | 对一个目录里的图片批量跑同一个工具或批量生图，逐张报告成败 |
 | **成本预估** | `--dry-run` 只报告计划与预计消耗，不上传、不建任务、不扣额度 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
@@ -216,6 +217,9 @@ pwish cutout ./photo.jpg              # 抠图 → 透明底 PNG
 pwish upscale ./photo.jpg [--type photo|general|text] [--scale 2]
 pwish restore ./photo.jpg             # 高清修复（模糊 / 低清 / 老照片）
 pwish whitebg -i ./p.jpg -i ./ref.jpg # 商品还原/白底（服务端要求正好 2 张图）
+pwish mannequin ./shirt.jpg           # 幽灵模特：服装 3D 图 / 隐形人台
+pwish flatlay ./shirt.jpg             # 平铺图：俯拍铺平
+pwish wrinkle ./shirt.jpg             # 去衣服褶皱
 pwish expand ./photo.jpg --to 16:9    # 图像扩展：自动算四边外扩量
 pwish translate ./poster.jpg --to ENG # 图片翻译：保留版式替换文字
 pwish batch cutout ./photos -o out/cut   # 批量抠图（目录里所有图片）
@@ -260,6 +264,10 @@ pwish gen "白底商品图，柔和阴影" -i ./mug.jpg -n 3 -o out/v1
 
 # 竖图改成 16:9 横版（电商主图 / 详情页头图）
 pwish expand ./mug.jpg --to 16:9 -o out/wide
+
+# 服装图：一件衣服 → 幽灵模特 / 平铺图（各一张，可用 --ratio 指定画幅）
+pwish mannequin ./dress.jpg --ratio 3:4 -o out/ghost
+pwish flatlay ./dress.jpg --ratio 1:1 -o out/flat
 
 # 商品还原：商品图 + 参考图（两张，服务端硬性要求）
 pwish whitebg -i ./product.jpg -i ./reference.jpg -o out/clean
@@ -332,6 +340,8 @@ pwish dewatermark ./old.jpg -o out/fix
 | 变清晰 | `POST tasks/login/scale` → `GET tasks/login/scale/{task_id}` |
 | 高清修复 | `POST tasks/login/scale-pro` → `GET tasks/login/scale-pro/{task_id}` |
 | 商品还原/白底 | `POST tasks/login/external/gem-image-edit` → `GET tasks/login/external/gem-image-edit/{task_id}` |
+| 幽灵模特 / 平铺图 | `POST tasks/login/external/gem-image-edit`（`from=ghost-model` / `flat-lay`，`model_type=195`） |
+| 去褶皱 | `POST tasks/login/external/remove-wrinkle` → `GET tasks/login/external/remove-wrinkle/{task_id}` |
 | 图像扩展 | `POST tasks/login/self-image-expand` → `GET tasks/login/self-image-expand/{task_id}` |
 | 图片翻译 | `POST tasks/login/external/image-translate` → `GET tasks/login/external/image-translate/{task_id}` |
 | AI 换背景 | `POST tasks/login/background` → `GET tasks/login/background/{task_id}` |

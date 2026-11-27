@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { convertFormat, expansionForTarget, resultUrls, translateImage, restoreProduct } from "../src/tools.js";
+import { convertFormat, expansionForTarget, resultUrls, translateImage, restoreProduct, garmentBody } from "../src/tools.js";
 
 test("resultUrls 只取正式结果，忽略预览图与蒙版", () => {
   const data = {
@@ -116,4 +116,23 @@ test("restoreProduct 要求正好 2 张源图（服务端限制）", async () =>
   await assert.rejects(() => restoreProduct(client, { images: ["a.png"] }), /正好 2 张/);
   await assert.rejects(() => restoreProduct(client, { images: ["a.png", "b.png", "c.png"] }), /正好 2 张/);
   await assert.rejects(() => restoreProduct(client, { images: [] }), /正好 2 张/);
+});
+
+test("garmentBody：幽灵模特与平铺图的固定参数", () => {
+  const ghost = garmentBody({ mode: "mannequin", ratio: "1:1", resourceId: "r1" });
+  assert.equal(ghost.from, "ghost-model");
+  assert.equal(ghost.quality, "default");
+  assert.equal(ghost.model_type, 195);
+  assert.equal(ghost.provider_model, 195);
+  assert.deepEqual(ghost.source_resource_ids, ["r1"]);
+
+  const flat = garmentBody({ mode: "flatlay", ratio: "3:4", resourceId: "r2" });
+  assert.equal(flat.from, "flat-lay");
+  assert.equal(flat.quality, "high");
+  assert.equal(flat.aspect_ratio, "3:4");
+});
+
+test("garmentBody 未知 mode 回落到幽灵模特而不是发空 from", () => {
+  const body = garmentBody({ mode: "whatever", resourceId: "r" });
+  assert.equal(body.from, "ghost-model");
 });

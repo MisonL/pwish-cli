@@ -276,6 +276,52 @@ export async function removeObject(client, { file, mask, strength = 3, timeoutMs
   return { taskId, data, resourceId: source.resourceId };
 }
 
+/**
+ * 服装图：幽灵模特（服装 3D 图）/ 平铺图。
+ *
+ * 两者都是 gem-image-edit 的 `from` 变体，固定 model_type=195（GPT Image 2）：
+ *  - ghost-model：quality=default，把衣服从模特身上「脱」成隐形人台效果
+ *  - flat-lay：quality=high，铺平成俯拍平铺图
+ */
+export function garmentBody({ mode = "mannequin", ratio = "1:1", resourceId }) {
+  const isFlatLay = mode === "flatlay";
+  return {
+    source_resource_ids: [resourceId],
+    from: isFlatLay ? "flat-lay" : "ghost-model",
+    model_type: 195,
+    provider_model: 195,
+    quality: isFlatLay ? "high" : "default",
+    aspect_ratio: ratio,
+    product_id: 482,
+    language: "zh",
+    website_language: "zh",
+    template_type: 0,
+  };
+}
+
+export async function garmentModel(client, { file, mode = "mannequin", ratio = "1:1", timeoutMs = 600_000 } = {}) {
+  const isFlatLay = mode === "flatlay";
+  const up = await uploadFile(client, file);
+  const body = garmentBody({ mode, ratio, resourceId: up.resourceId });
+  const taskId = await create(client, "tasks/login/external/gem-image-edit", body, isFlatLay ? "平铺图" : "幽灵模特");
+  const data = await poll(client, "tasks/login/external/gem-image-edit", taskId, timeoutMs);
+  return { taskId, data, resourceId: up.resourceId };
+}
+
+/**
+ * 去褶皱（服装 / 布料褶皱消除）。
+ * alpha 是 0 以上的数字（传布尔会被服务端拒绝：`must be equal or greater than 0`）。
+ */
+export function removeWrinkle(client, { file, alpha = 0, timeoutMs = 300_000 } = {}) {
+  return run(client, {
+    file,
+    endpoint: "tasks/login/external/remove-wrinkle",
+    body: (source) => ({ source_resource_id: source, alpha: Number(alpha) || 0 }),
+    timeoutMs,
+    label: "去褶皱",
+  });
+}
+
 /** 黑白照片上色。 */
 export function colorize(client, { file, timeoutMs = 300_000 } = {}) {
   return run(client, {

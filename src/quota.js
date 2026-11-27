@@ -49,6 +49,9 @@ const TOOL_FIELDS = {
   dewatermark: { remain: "watermark_image_free_num" },
   erase: { remain: "object_refine_num" },
   colorize: { remain: "colorization_general_gift" },
+  wrinkle: { remain: "remove_wrinkle_num" },
+  mannequin: { remain: "ghost_model" },
+  flatlay: { remain: "flat_lay" },
   translate: { remain: "image_translate_num" },
   convert: { remain: "document_conversion_num" },
 };

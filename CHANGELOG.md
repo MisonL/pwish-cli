@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-27
+
+### Added
+
+- **`pwish wrinkle` 去褶皱**：`POST tasks/login/external/remove-wrinkle`（`alpha` 必为 0 以上数字，
+  传布尔报 `must be equal or greater than 0`），实测出图，额度 4 → 3
+- **`pwish mannequin` 幽灵模特**（服装 3D 图 / 隐形人台）：`gem-image-edit` + `from=ghost-model`
+  + `model_type=195` + `quality=default`，实测出图（1.4 MB PNG），额度 2 → 0
+- **`pwish flatlay` 平铺图**：同一接口 `from=flat-lay` + `quality=high`，实测出图（1 MB PNG），额度 2 → 1
+- 抽出 `garmentBody()` 纯函数，补 2 条参数测试（109 → 111）
+
+### Research
+
+- 这三个能力是从服装工具页的 chunk 树（295 个文件）里挖出来的，取代了之前「找不到服务端接口」的结论
+- `aspect_ratio` 只接受站点画幅枚举（1:1/16:9/9:16/3:7/7:3/4:3/3:4/2:3/3:2/9:21/21:9 及几个商品图尺寸）；
+  传 `auto` 会报 400
+
 ## [0.14.0] - 2026-11-27
 
 ### Added

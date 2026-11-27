@@ -1,6 +1,6 @@
 ---
 name: pwish
-description: 用 `pwish` 命令行工具调用佐糖（picwish.cn）的图片能力：一句话生图、电商套图、电商详情图、抠图去背景、变清晰、高清修复、商品还原/白底、图像扩展、图片翻译、AI 换背景、去水印、去杂物、黑白上色、格式转换，并把结果下载到本地。当用户要生成商品图/电商图/白底图/场景图/模特图/套图/详情图，或要抠图、去背景、换背景、去水印、修图、放大清晰化、给老照片上色、改图片格式，以及提到佐糖/picwish/AI 设计师时使用。
+description: 用 `pwish` 命令行工具调用佐糖（picwish.cn）的图片能力：一句话生图、电商套图、电商详情图、抠图去背景、变清晰、高清修复、商品还原/白底、幽灵模特、平铺图、去褶皱、图像扩展、图片翻译、AI 换背景、去水印、去杂物、黑白上色、格式转换，并把结果下载到本地。当用户要生成商品图/电商图/白底图/场景图/模特图/套图/详情图，或要抠图、去背景、换背景、去水印、修图、放大清晰化、给老照片上色、改图片格式，以及提到佐糖/picwish/AI 设计师时使用。
 ---
 
 # 佐糖 AI 设计师（pwish CLI）
@@ -134,6 +134,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 | `pwish upscale ./p.jpg` | 变清晰 / 放大 | — | JPG；`--type photo\|general\|text`，`--scale 2` |
 | `pwish restore ./p.jpg` | 高清修复（模糊、低清、老照片） | — | JPG |
 | `pwish whitebg -i ./p.jpg -i ./ref.jpg` | 商品还原 / 白底 | 正好 2 张图 | PNG |
+| `pwish mannequin ./p.jpg` | 幽灵模特（服装 3D 图） | `--ratio` | PNG |
+| `pwish flatlay ./p.jpg` | 平铺图（俯拍） | `--ratio` | PNG |
+| `pwish wrinkle ./p.jpg` | 去衣服褶皱 | — | JPG |
 | `pwish expand ./p.jpg --to 16:9` | 图像扩展 / 扩图 | `--to` 或 `--left/--top` | PNG |
 | `pwish translate ./p.jpg --to ENG` | 图片翻译（换字保版式） | `--from/--to` 语言码 | JPG |
 | `pwish bg ./p.jpg --prompt "..."` | AI 换背景（内部先抠图） | `--prompt` | 1-4 张 JPG 候选 |
@@ -163,6 +166,9 @@ pwish detail -i ./product.jpg --selling "简约白瓷马克杯 350ml，可微波
 - **批量生图**：`pwish batch gen ./photos --prompt "白底商品图"` 给每张图各生成一张，整批共用一个会话。
   `--prompt-file` 每行对应一张（顺序按文件名排序），只写 1 行则会复用到所有图；条数对不上会直接报错。
   批量生图按「张数 × --n」核对模型额度。
+- **幽灵模特 / 平铺图**：同一件衣服分别出「隐形人台」和「铺平」效果，底层是同一个外部编辑接口，
+  用 `from` 和 `quality` 区分；`--ratio` 只接受站点画幅（1:1 / 3:4 / 4:3 / 16:9 等）。
+- **去褶皱**：`alpha` 是 0 以上数字，传布尔会被服务端拒（`must be equal or greater than 0`）。
 - **商品还原/白底**：服务端**硬性要求正好 2 张源图**，少一张多一张都会报
   `product-restore requires exactly 2 source images`；用 `-i` 传两次。`--size` 控制画幅（默认 1:1）。
 - **图片翻译**：默认中译英（`--from CHS --to ENG`），语言码用三字母大写（CHS/CHT/ENG/JPN/KOR/FRA/DEU/
