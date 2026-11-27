@@ -352,6 +352,14 @@ pwish skill --install
 **能力边界**（没做 / 没验证，不要当成能用）：
 
 - **视频生成未实现**：接口存在（`tasks/login/video-messages`），账号无视频额度，未能实测，因此没有封装。
+- **官方批量套图未接入**：`POST tasks/login/suite-batch` 已确认入参结构
+  （顶层 `model_type/size/site/country/lang/scene/items[]`，每个 item 必须有 `source_resource_ids`），
+  但这个管线**只走算粒**：结构正确时直接返回 `CREDIT_NOT_ENOUGH · insufficient VIP balance`，
+  免费额度 `suite_batch` 计数不参与放行。免费账号无法端到端验证，所以不封装；
+  CLI 的 `pwish batch suite` 类需求可用现有的 `pwish suite` 循环替代。
+- **AI 阴影未接入**：`tasks/login/ai-shadow` 参数已摸清（`bg_color` 必填，否则 `15557 Error color`），
+  但单张模式建任务后 `task failed`、批量模式直接算粒不足，同样无法验证产出。
+- **商品还原需要 2 张图**：`pwish whitebg` 是站点后处理接口，服务端硬性校验 `exactly 2 source images`。
 - **套图场景 5/7**：见上文「场景」，「场景展示图」「多场景拼图」不支持。
 - **`--mode stable` 未实测**：参数正确下发，但只验证过 `economy`。
 - **换背景需要提示词**：`pwish bg` 先用抠图得到透明底，再调背景生成；一次返回 1-4 张候选。

@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-27
+
+### Research → 已知限制
+
+- 摸清官方批量套图 `POST tasks/login/suite-batch` 的入参结构：顶层 `model_type`、`size`、`site`、
+  `country`、`lang`、`scene`、`items[]`，每个 item 必须带 `source_resource_ids`（否则
+  `The SourceResourceIds field is required`）
+- **该管线只走算粒**：结构正确后直接返回 `CREDIT_NOT_ENOUGH · insufficient VIP balance`，
+  免费额度 `suite_batch=10` 不参与放行。免费账号无法端到端验证，因此不封装，记入已知限制
+- 文档同步：README 已知限制补批量套图 / AI 阴影 / 商品还原两张图的硬性约束；SKILL 提醒不要重试
+
 ## [0.13.0] - 2026-11-27
 
 ### Added
