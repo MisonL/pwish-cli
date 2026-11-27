@@ -52,3 +52,28 @@ test("GET 网络错误会重试，POST 不会重试", async () => {
     globalThis.fetch = realFetch;
   }
 });
+
+test("GET 遇到 502 会重试，POST 不会", async () => {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push(opts?.method || "GET");
+    return {
+      ok: false,
+      status: 502,
+      text: async () => JSON.stringify({ status: 502, message: "bad gateway" }),
+    };
+  };
+  try {
+    const { createClient } = await import("../src/api.js");
+    const client = createClient({ token: "v2,10000001,482,0123456789abcdef0123456789abcdef" });
+    await assert.rejects(() => client.request("vips/all-free-counts"));
+    assert.equal(calls.length, 3, "GET 默认重试 2 次（共 3 次请求）");
+
+    calls.length = 0;
+    await assert.rejects(() => client.request("tasks/login/scale", { method: "POST", body: {} }));
+    assert.equal(calls.length, 1, "POST 不重试");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

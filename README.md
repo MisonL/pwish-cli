@@ -78,7 +78,7 @@ CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结�
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，124 个用例
+npm test         # node --test，128 个用例
 npm run test:watch
 ```
 
@@ -146,8 +146,9 @@ pwish login
 
 安全设计：
 - 只 `listen` 在 `127.0.0.1`，校验 `Host` 头，防 DNS rebinding；
-- `state` 一次性、随机 22 位；**二维码、二维码轮询、密码登录、token 回传四个接口都必须带匹配的
-  `state`**，本机其他进程无法凭空轮询登录结果；`/health` 不回显 `state`；
+- `state` 一次性、随机 22 位；二维码、轮询、密码登录、token 回传四个接口都必须带匹配的 `state`；
+- 这四个接口还要求 **`User-Agent` 与打开登录页的浏览器一致**，凭据只交接一次（第二次 409），
+  二维码轮询 800ms 节流；`/health` 不回显 `state`。本机其他进程即使读到页面拿到 `state` 也换不到 token；
 - 授权码一次性、60 秒过期；`token` 走 POST body，登录完成后再以 `Authorization` 头发请求；
 - 密码只在一次请求里透传给官方接口，不落盘；
 - 凭证存 `~/.config/pwish/config.json`，目录 `0700`、文件 `0600`（先写临时文件再 rename，避免 0644 窗口期）；
@@ -372,6 +373,9 @@ pwish dewatermark ./old.jpg -o out/fix
 ```bash
 pwish skill --install
 ```
+
+代理：CLI 用 Node 内置 `fetch`，需要走代理时用 `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:7890 pwish gen ...`
+（Node 24+ 支持；不引入第三方依赖）。
 
 ## 已知限制
 

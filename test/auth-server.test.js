@@ -9,6 +9,13 @@ function stateOf(auth) {
   return auth.state;
 }
 
+/** 登录页必须先被打开（记录 UA），后续 /api/** 与 /session 才允许调用。 */
+async function openPage(auth) {
+  const res = await fetch(auth.authorizeUrl);
+  assert.equal(res.status, 200);
+  return res;
+}
+
 test("PKCE S256 challenge 正确且可校验", () => {
   const { verifier, challenge, method } = createPkce();
   assert.equal(method, "S256");
@@ -61,6 +68,7 @@ test("state 不匹配时拒绝打开授权页", async () => {
 
 test("完整授权码 + PKCE 流程：登录页 → session → callback → token", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
 
   // 页面把登录拿到的 token 回传本机服务
   const session = await fetch(`${auth.origin}/session`, {
@@ -87,6 +95,7 @@ test("完整授权码 + PKCE 流程：登录页 → session → callback → tok
 
 test("session 拒绝非法 token", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
   const res = await fetch(`${auth.origin}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -98,6 +107,7 @@ test("session 拒绝非法 token", async () => {
 
 test("session 拒绝错误 state", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
   const res = await fetch(`${auth.origin}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -110,6 +120,7 @@ test("session 拒绝错误 state", async () => {
 
 test("授权码一次性：服务还活着时重放就被拒绝", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
   const session = await fetch(`${auth.origin}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -167,6 +178,7 @@ test("端口占用时给出可读的错误提示", async () => {
 
 test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游网络）", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
   const res = await fetch(`${auth.origin}/api/qrcode/poll`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -181,6 +193,7 @@ test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游�
 
 test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000, codeTtlMs: 0 });
+  await openPage(auth);
   const session = await fetch(`${auth.origin}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -195,6 +208,7 @@ test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", 
 
 test("登录相关接口必须带匹配的 state，本机其他进程不能凭空轮询二维码", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
 
   const noState = await fetch(`${auth.origin}/api/qrcode`, { method: "POST" });
   assert.equal(noState.status, 400);
@@ -222,5 +236,51 @@ test("/health 不回显 state", async () => {
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.equal(body.state, undefined);
+  await auth.close();
+});
+
+test("不是打开登录页的那个 UA 一律 403（本机其他进程拿到 state 也没用）", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
+
+  const res = await fetch(`${auth.origin}/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "evil-local-process/1.0" },
+    body: JSON.stringify({ token: TOKEN, state: auth.state }),
+  });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).message, /不是来自登录页/);
+  await auth.close();
+});
+
+test("凭据只交接一次：第二次 /session 返回 409", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000 });
+  await openPage(auth);
+
+  const post = () =>
+    fetch(`${auth.origin}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: TOKEN, state: auth.state }),
+    });
+
+  assert.equal((await post()).status, 200);
+  assert.equal((await post()).status, 409);
+  await auth.close();
+});
+
+test("二维码轮询有节流，短时间内连刷返回 429", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000, pollQr: async () => ({ status: "waiting" }) });
+  await openPage(auth);
+  const poll = () =>
+    fetch(`${auth.origin}/api/qrcode/poll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hashKey: "k", state: auth.state }),
+    });
+  const first = await poll();
+  assert.notEqual(first.status, 429);
+  const second = await poll();
+  assert.equal(second.status, 429);
   await auth.close();
 });

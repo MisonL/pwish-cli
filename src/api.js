@@ -55,7 +55,9 @@ export function createClient(overrides = {}) {
       try {
         return await send(path, { method, body, query, timeout, baseOverride });
       } catch (err) {
-        const retryable = err.code === "NETWORK_ERROR" && attempt < attempts;
+        // GET 是幂等的：网络抖动与 502/503/504 都可以重试；POST 一律不重试，避免重复建任务/扣额度
+        const transientStatus = method === "GET" && [502, 503, 504].includes(Number(err.payload?.status ?? 0));
+        const retryable = (err.code === "NETWORK_ERROR" || transientStatus) && attempt < attempts;
         if (!retryable) throw err;
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }

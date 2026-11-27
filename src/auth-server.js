@@ -99,6 +99,7 @@ export function startAuthServer({
   host = "127.0.0.1",
   autoRefreshQr = true,
   codeTtlMs = CODE_TTL_MS, // 仅测试注入用：验证过期分支
+  pollQr = pollWechatQr, // 仅测试注入用：避免用例依赖上游网络
 } = {}) {
   const pkce = createPkce();
   const state = newState();
@@ -137,6 +138,9 @@ export function startAuthServer({
   };
 
   let origin = "";
+  let pageUA = null; // 打开登录页的浏览器 UA，后续 API 必须来自同一个 UA
+  let tokenPosted = false; // 凭据只允许交接一次
+  let lastPollAt = 0; // 二维码轮询节流
 
   const server = http.createServer(async (req, res) => {
     const actualPort = server.address()?.port ?? port;
@@ -159,6 +163,9 @@ export function startAuthServer({
       res.end(JSON.stringify(obj));
     };
 
+    /** 只接受与打开登录页相同的 UA：本机其他进程即使拿到 state 也过不了这一关。 */
+    const fromLoginPage = () => pageUA !== null && String(req.headers["user-agent"] || "") === pageUA;
+
     try {
       // 授权端点：登录页
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/authorize")) {
@@ -166,12 +173,17 @@ export function startAuthServer({
           sendHtml(400, renderErrorPage("state 不匹配，请重新执行 pwish login"));
           return;
         }
+        pageUA = String(req.headers["user-agent"] || "");
         sendHtml(200, renderLoginPage({ origin, state }));
         return;
       }
 
       // 微信二维码：state 必须匹配，否则别的本机进程拿不到二维码轮询入口
       if (req.method === "POST" && url.pathname === "/api/qrcode") {
+        if (!fromLoginPage()) {
+          sendJson(403, { message: "请求不是来自登录页" });
+          return;
+        }
         const body = await readJsonBody(req);
         if (body.state !== state) {
           sendJson(400, { message: "state 不匹配" });
@@ -188,6 +200,10 @@ export function startAuthServer({
       }
 
       if (req.method === "POST" && url.pathname === "/api/qrcode/poll") {
+        if (!fromLoginPage()) {
+          sendJson(403, { message: "请求不是来自登录页" });
+          return;
+        }
         const body = await readJsonBody(req);
         if (body.state !== state) {
           sendJson(400, { message: "state 不匹配" });
@@ -201,8 +217,14 @@ export function startAuthServer({
           sendJson(400, { message: "二维码不属于当前登录会话" });
           return;
         }
+        const now = Date.now();
+        if (now - lastPollAt < 800) {
+          sendJson(429, { message: "轮询过快，请稍候" });
+          return;
+        }
+        lastPollAt = now;
         try {
-          const result = await pollWechatQr(String(body.hashKey));
+          const result = await pollQr(String(body.hashKey));
           if (result.status === "waiting") sendJson(200, { status: "waiting" });
           else sendJson(200, { status: "ok", token: result.token });
         } catch (err) {
@@ -216,6 +238,10 @@ export function startAuthServer({
 
       // 密码登录
       if (req.method === "POST" && url.pathname === "/api/login/password") {
+        if (!fromLoginPage()) {
+          sendJson(403, { message: "请求不是来自登录页" });
+          return;
+        }
         const body = await readJsonBody(req);
         if (body.state !== state) {
           sendJson(400, { message: "state 不匹配" });
@@ -233,6 +259,14 @@ export function startAuthServer({
 
       // 页面回传 token → 签发授权码
       if (req.method === "POST" && url.pathname === "/session") {
+        if (!fromLoginPage()) {
+          sendJson(403, { message: "请求不是来自登录页" });
+          return;
+        }
+        if (tokenPosted) {
+          sendJson(409, { message: "本次登录已经交接过凭据，请重新执行 pwish login" });
+          return;
+        }
         const body = await readJsonBody(req);
         if (body.state !== state) {
           sendJson(400, { message: "state 不匹配" });
@@ -243,6 +277,7 @@ export function startAuthServer({
           sendJson(400, { message: "登录态格式不正确" });
           return;
         }
+        tokenPosted = true; // 一次性：交接完任何请求都拿不到第二份凭据
         const code = issueCode(token);
         sendJson(200, {
           redirect: `${origin}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,

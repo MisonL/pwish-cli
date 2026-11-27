@@ -5,6 +5,26 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-27
+
+### Security
+
+- **登录凭据交接加固**：`/api/qrcode`、`/api/qrcode/poll`、`/api/login/password`、`/session`
+  除 `state` 外还要求 `User-Agent` 与打开登录页的浏览器一致；凭据只交接一次（第二次 409）；
+  二维码轮询 800ms 节流。此前本机其他进程读到登录页拿到 `state` 就能换到 token
+
+### Added
+
+- `pwish history --all`：翻页拉全量会话（最多 20 页）
+- GET 请求遇到 502/503/504 自动重试（POST 仍绝不重试，避免重复建任务）
+- README 补代理用法：`NODE_USE_ENV_PROXY=1 HTTPS_PROXY=...`（Node 24+ 内置，不引依赖）
+
+### Tests
+
+- 新增 UA 不符 403、凭据二次交接 409、轮询节流 429 三条用例
+- `startAuthServer` 支持注入 `pollQr`，登录相关用例不再依赖上游网络
+- API 客户端补「GET 502 重试 / POST 不重试」用例（124 → 128）
+
 ## [0.16.2] - 2026-11-27
 
 ### Docs

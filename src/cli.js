@@ -1225,8 +1225,20 @@ async function cmdTask(args) {
 
 async function cmdHistory(args) {
   const client = clientFromConfig(args.flags);
-  const data = await listConversations(client, { page: Number(args.flags.page || 1), perPage: Number(args.flags.limit || 20) });
-  const items = data?.items || [];
+  const perPage = Number(args.flags.limit || 20);
+  let items = [];
+  if (args.flags.all) {
+    // --all：翻页拉全量（最多 20 页，避免无限循环）
+    for (let page = 1; page <= 20; page += 1) {
+      const data = await listConversations(client, { page, perPage });
+      const batch = data?.items || [];
+      items = items.concat(batch);
+      if (batch.length < perPage) break;
+    }
+  } else {
+    const data = await listConversations(client, { page: Number(args.flags.page || 1), perPage });
+    items = data?.items || [];
+  }
   if (args.flags.json) return json(items), 0;
   if (!items.length) return say("暂无历史会话"), 0;
   for (const it of items) {
@@ -1343,7 +1355,7 @@ ${cyan}批量处理（对目录里的图片跑同一个工具）
 
 ${cyan}查询与下载
   pwish task <task_id> [...]    查询任务状态
-  pwish history [--limit 20]    历史会话
+  pwish history [--limit 20] [--all]  历史会话（--all 翻页拉全量）
   pwish show <conversation_id>  会话详情
   pwish download <id> [-o dir]  重新下载图片
   pwish queue                   查看任务队列

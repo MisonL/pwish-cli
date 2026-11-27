@@ -11,7 +11,7 @@ const VALUE_FLAGS = new Set([
 
 /** 纯开关（不需要值）。 */
 const BOOLEAN_FLAGS = new Set([
-  "json", "no-download", "help", "no-plan",
+  "json", "no-download", "help", "no-plan", "all",
   "no-open", "version", "v", "skill", "install", "print", "showpath", "force", "quiet", "dry-run",
 ]);
 
