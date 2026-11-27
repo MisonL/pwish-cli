@@ -14,8 +14,9 @@
 
 ### Tests
 
-- 假服务关闭时先 `closeAllConnections()` 再 `close()`：keep-alive 连接会让 `server.close()`
-  在 CI 的 Node 24 上永不返回（本地 Node 24 不触发，属于环境差异，已实测复现并修复）
+- 假服务关闭时先 `closeAllConnections()` 再 `close()`，并加 3s 兜底：keep-alive 连接会让
+  `server.close()` 在 CI 的 Node 22/24 上间歇挂住（本地复现不了，被测到两次）；
+  兜底计时器 `unref()`，不影响正常退出
 - 新增**零网络端到端测试**（`test/e2e-gen.test.js`）：本地假服务模拟 `POST /image/conversations`、
   `POST image-messages`、`GET image-messages/batch`，真实 spawn CLI 验证完整链路：
   建 N 任务、`--json` 输出结构、任务失败退出码、非法 `-n` 零请求（135 → 139）

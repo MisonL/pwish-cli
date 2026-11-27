@@ -55,10 +55,16 @@ async function startFakeApi({ tasks = "ok" } = {}) {
     calls,
     close: () =>
       new Promise((resolve) => {
-        // fetch 的 keep-alive 连接会让 server.close() 一直等；先掐掉再关（Node 24 上尤其明显）
+        // fetch 的 keep-alive 连接会让 server.close() 在不同 Node 版本上行为不一致：
+        // 先掐连接再关，并加 3s 兜底，保证 CI 不会因测试清理挂死。
         server.closeIdleConnections?.();
         server.closeAllConnections?.();
-        server.close(resolve);
+        const timer = setTimeout(resolve, 3000);
+        timer.unref?.();
+        server.close(() => {
+          clearTimeout(timer);
+          resolve();
+        });
       }),
   };
 }
