@@ -57,7 +57,18 @@ for (const file of files) {
     if (/\bconsole\.(log|info)\b/.test(source)) problems.push(`${file}: 请用 output.js 而非 console.log`);
   }
 
-  // 5. FIXME/XXX 遗留（跳过自检脚本自身，它包含这些字面量）
+  // 5. src 里不该直接 process.exit（退出码统一由 bin/pwish.js 决定）
+  if (file.startsWith("src/") && /process\.exit\(/.test(source)) {
+    problems.push(`${file}: src 里不要 process.exit，交给 bin/pwish.js 统一处理`);
+  }
+
+  // 6. 网络请求必须带超时（fetch 不带 signal 会无限挂起）
+  if (file.startsWith("src/") && /await fetch\([^)]*\)(?!.*signal)/s.test(source)) {
+    const hasSignal = /signal:\s*(AbortSignal\.timeout|controller\.signal|opts\.signal)/.test(source);
+    if (!hasSignal) problems.push(`${file}: fetch 需要 AbortSignal 超时`);
+  }
+
+  // 7. FIXME/XXX 遗留（跳过自检脚本自身，它包含这些字面量）
   if (file !== "scripts/check.js") {
     const marker = source.match(/\b(FIXME|XXX)\b/);
     if (marker) problems.push(`${file}: 遗留 ${marker[1]}`);

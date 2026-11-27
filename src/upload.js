@@ -102,6 +102,7 @@ async function performUpload(client, abs, prefix) {
   });
 
   const res = await fetch(`https://${host}/${key}`, {
+    signal: AbortSignal.timeout(180_000), // 大图上传可能慢，但必须有上限
     method: "PUT",
     headers: {
       "Content-Type": mime,

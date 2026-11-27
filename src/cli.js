@@ -444,10 +444,10 @@ async function runToolOnce(client, name, image, args, { quiet = false } = {}) {
 
   const saved = [];
   if (!args.flags["no-download"]) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const stamp = timestamp();
     for (const [i, url] of urls.entries()) {
       const ext = tool.ext || `.${opts.format || "png"}`;
-      const base = `${path.basename(image, path.extname(image))}-${name}${urls.length > 1 ? `-${i + 1}` : ""}-${stamp}`;
+      const base = `${safeName(path.basename(image, path.extname(image)))}-${name}${urls.length > 1 ? `-${i + 1}` : ""}-${stamp}`;
       saved.push(await downloadImage(url, outDir, base, ext));
     }
   }
@@ -697,7 +697,7 @@ async function runGenOnce(client, { prompt, image, conversationId, model, ratio,
     for (const [i, img] of imgs.entries()) {
       urls.push(img.url);
       if (!download) continue;
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const stamp = timestamp();
       const base = `${stamp}-${taskId.slice(0, 8)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
       saved.push(await downloadImage(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png"));
     }
@@ -912,7 +912,7 @@ async function cmdGen(args) {
 
   const downloaded = [];
   if (!args.flags["no-download"]) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const stamp = timestamp();
     for (const r of results) {
       for (const [i, img] of r.images.entries()) {
         const base = `${stamp}-${r.taskId.slice(0, 8)}${r.images.length > 1 ? `-${i + 1}` : ""}`;
@@ -1034,10 +1034,10 @@ async function cmdSuite(args) {
 
   const downloaded = [];
   if (!args.flags["no-download"]) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const stamp = timestamp();
     for (const [scene, imgs] of Object.entries(byScene)) {
       for (const [i, img] of imgs.entries()) {
-        const base = `${stamp}-suite-${scene}${imgs.length > 1 ? `-${i + 1}` : ""}`;
+        const base = `${stamp}-suite-${safeName(scene)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
         const saved = await downloadImage(img.url, outDir, base, ".png");
         downloaded.push({ scene, ...saved });
       }
@@ -1153,10 +1153,10 @@ async function cmdDetail(args) {
 
   const downloaded = [];
   if (!args.flags["no-download"]) {
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const stamp = timestamp();
     for (const [scene, imgs] of Object.entries(byScene)) {
       for (const [i, img] of imgs.entries()) {
-        const base = `${stamp}-detail-${scene}${imgs.length > 1 ? `-${i + 1}` : ""}`;
+        const base = `${stamp}-detail-${safeName(scene)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
         const saved = await downloadImage(img.url, outDir, base, ".png");
         downloaded.push({ scene, ...saved });
       }
@@ -1279,7 +1279,7 @@ async function cmdDownload(args) {
   const urls = taskImageUrls(resolved);
   if (!urls.length) throw new UserError(`没有找到任务或会话 ${id} 的图片`, "NOT_FOUND");
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const stamp = timestamp();
   const files = [];
   for (const [i, url] of urls.entries()) {
     const saved = await downloadImage(url, outDir, `${stamp}-${i + 1}`);

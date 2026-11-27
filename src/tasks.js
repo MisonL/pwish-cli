@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { safeName } from "./filename.js";
 import path from "node:path";
 import { ApiError } from "./api.js";
 
@@ -144,12 +145,18 @@ export function assertSafeUrl(raw) {
   return parsed.toString();
 }
 
-export async function downloadImage(url, outDir, basename, fallbackExt = ".png") {
+export async function downloadImage(url, outDir, basename, fallbackExt = ".png", { timeoutMs = 120_000 } = {}) {
   fs.mkdirSync(outDir, { recursive: true });
   const safeUrl = assertSafeUrl(url);
   const ext = extFromUrl(safeUrl, fallbackExt);
-  const file = path.join(outDir, `${basename}${ext}`);
-  const res = await fetch(safeUrl);
+  // basename 可能含服务端给的 scene/task 片段，落盘前统一消毒，避免路径穿越
+  const file = path.join(outDir, `${safeName(basename)}${ext}`);
+  let res;
+  try {
+    res = await fetch(safeUrl, { signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    throw new Error(err.name === "TimeoutError" ? `下载超时（${Math.round(timeoutMs / 1000)}s）` : `下载失败：${err.message}`);
+  }
   if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}：${safeUrl.slice(0, 120)}`);
   const buf = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(file, buf);

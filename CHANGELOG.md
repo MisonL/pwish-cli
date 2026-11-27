@@ -5,6 +5,27 @@
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-11-27
+
+### Security / Fixed
+
+- **文件名消毒**：结果文件名会拼进服务端返回的 `scene`/任务片段与原始文件名，
+  现在统一清掉路径分隔符、Windows 保留字符、控制字符与首尾点（`src/filename.js`），
+  防止 `../` 之类的内容把文件写到目标目录之外
+- **下载/上传补超时**：结果下载 120s、上传 PUT 180s、抠图结果拉取 120s；
+  此前 `fetch` 没有 `AbortSignal`，网络卡住会无限挂起
+
+### Changed
+
+- 时间戳生成从 6 处重复实现收敛到 `timestamp()`（统一 `2026-11-27T10-30-00` 格式，Windows 可用）
+- `npm run release`：发布前校验 + 打 `vX.Y.Z` 标签；**补打历史标签 v0.7.0 ~ v0.18.0**
+  （此前一直用 `npm version --no-git-tag-version` 发布，仓库里一个 tag 都没有）
+
+### Chore
+
+- `scripts/check.js` 新增两条自检：`src/` 里禁止 `process.exit`、`fetch` 必须带超时；
+  新增 `test/filename.test.js`（5 条）与下载超时用例（129 → 135）
+
 ## [0.18.0] - 2026-11-27
 
 ### Changed

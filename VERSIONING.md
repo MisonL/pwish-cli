@@ -1,3 +1,6 @@
+> 发布标签：`vX.Y.Z`（从 v0.7.0 开始补打，历史版本以 CHANGELOG 为准）。
+> 每次发版执行 `git tag -a vX.Y.Z -m "pwish-cli X.Y.Z" && git push --tags`。
+
 # 版本与发布管理
 
 ## 版本格式

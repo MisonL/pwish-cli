@@ -79,7 +79,7 @@ CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结�
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，129 个用例
+npm test         # node --test，135 个用例
 npm run test:watch
 ```
 
