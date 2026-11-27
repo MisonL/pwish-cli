@@ -48,27 +48,30 @@ test("loginWithToken 拒绝格式不对的 token", () => {
   assert.equal(loginWithToken(" v2,10000003,482,x "), "v2,10000003,482,x");
 });
 
-test("OSS V1 签名与手工计算一致", async () => {
-  const { uploadFile } = await import("../src/upload.js");
-  // 通过一个假 client 验证签名分支的真实输出（只走到 OSS PUT，暴露 headers 即可）
+test("OSS V1 签名用生产函数算，且与手工推导的规范串一致", async () => {
+  const { ossV1Signature } = await import("../src/upload.js");
   const secret = "test-secret";
   const date = "Wed, 25 Nov 2026 06:27:53 GMT";
   const token = "sts-token";
   const bucket = "picwishsz";
   const key = "pub/tasks/input/llm_chats/x.png";
-  const ossHeaders = { "x-oss-date": date, "x-oss-security-token": token };
-  const canonical = Object.entries(ossHeaders)
-    .map(([k, v]) => [k.toLowerCase(), v])
-    .sort(([a], [b]) => (a > b ? 1 : a < b ? -1 : 0))
-    .map(([k, v]) => `${k}:${v}\n`)
-    .join("");
+  const ossHeaders = { "X-Oss-Date": date, "x-oss-security-token": token }; // 大小写混写，验证归一
+
+  const signature = ossV1Signature({
+    verb: "PUT",
+    mime: "image/png",
+    date,
+    ossHeaders,
+    bucket,
+    key,
+    secret,
+  });
+
+  const canonical = "x-oss-date:" + date + "\n" + "x-oss-security-token:" + token + "\n";
   const sts = `PUT\n\nimage/png\n${date}\n${canonical}/${bucket}/${key}`;
   const expected = crypto.createHmac("sha1", secret).update(sts).digest("base64");
-  // 与实现共享同一套规则：签名串必须包含 x-oss-date 与 security-token，且以 /bucket/key 结尾
-  assert.ok(expected.length > 0);
-  assert.ok(sts.includes("x-oss-date:"));
-  assert.ok(sts.endsWith(`/${bucket}/${key}`));
-  assert.equal(typeof uploadFile, "function");
+
+  assert.equal(signature, expected);
 });
 
 

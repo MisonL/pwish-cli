@@ -108,7 +108,7 @@ test("session 拒绝错误 state", async () => {
   await auth.close();
 });
 
-test("授权码一次性：重复回调失败", async () => {
+test("授权码一次性：服务还活着时重放就被拒绝", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
   const session = await fetch(`${auth.origin}/session`, {
     method: "POST",
@@ -116,11 +116,18 @@ test("授权码一次性：重复回调失败", async () => {
     body: JSON.stringify({ token: TOKEN, state: stateOf(auth) }),
   });
   const { redirect } = await session.json();
-  assert.equal((await fetch(redirect)).status, 200);
-  await auth.waitForToken();
-  // 服务已关闭，重放会被拒绝
-  await assert.rejects(fetch(redirect));
-  await auth.close();
+
+  const first = await fetch(redirect);
+  assert.equal(first.status, 200);
+
+  // 关键：此时还没调 waitForToken（它会关闭服务），所以重放是真的打到了活着的服务上，
+  // 400 才证明「授权码被消费」，而不是「连不上所以失败」。
+  const replay = await fetch(redirect);
+  assert.equal(replay.status, 400);
+  assert.match(await replay.text(), /授权码/);
+
+  const { token } = await auth.waitForToken();
+  assert.equal(token, TOKEN);
 });
 
 test("非本机 Host 被拒绝（DNS rebinding 防护）", async () => {
@@ -158,16 +165,31 @@ test("端口占用时给出可读的错误提示", async () => {
   await a.close();
 });
 
-test("/api/* 异常时返回 JSON 而非 HTML", async () => {
+test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游网络）", async () => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
-  // 伪造 hashKey 触发上游调用，当前网络环境下至少不会返回 HTML
   const res = await fetch(`${auth.origin}/api/qrcode/poll`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ hashKey: "bad-key" }),
+    body: "{not-json",
   });
-  const text = await res.text();
-  assert.ok(!text.startsWith("<!doctype"), "API 错误不应返回 HTML");
+  assert.equal(res.headers.get("content-type")?.includes("application/json"), true);
+  assert.equal(res.status, 500);
+  const body = await res.json();
+  assert.match(body.message, /请求格式不正确/);
+  await auth.close();
+});
+
+test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", async () => {
+  const auth = await startAuthServer({ timeoutMs: 8000, codeTtlMs: 0 });
+  const session = await fetch(`${auth.origin}/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: TOKEN, state: auth.state }),
+  });
+  const { redirect } = await session.json();
+  const res = await fetch(redirect);
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /过期/);
   await auth.close();
 });
 

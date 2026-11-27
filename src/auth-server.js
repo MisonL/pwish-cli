@@ -93,7 +93,13 @@ function readJsonBody(req, limit = 8192) {
  * @returns {Promise<{port:number, origin:string, authorizeUrl:string, state:string,
  *   waitForToken:()=>Promise<{token:string}>, close:()=>Promise<void>}>}
  */
-export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0.1", autoRefreshQr = true } = {}) {
+export function startAuthServer({
+  timeoutMs = 600_000,
+  port = 0,
+  host = "127.0.0.1",
+  autoRefreshQr = true,
+  codeTtlMs = CODE_TTL_MS, // 仅测试注入用：验证过期分支
+} = {}) {
   const pkce = createPkce();
   const state = newState();
   const codes = new Map(); // code -> { token, challenge, expiresAt }
@@ -117,7 +123,7 @@ export function startAuthServer({ timeoutMs = 600_000, port = 0, host = "127.0.0
 
   const issueCode = (token) => {
     const code = base64url(crypto.randomBytes(32));
-    codes.set(code, { token, challenge: pkce.challenge, expiresAt: Date.now() + CODE_TTL_MS });
+    codes.set(code, { token, challenge: pkce.challenge, expiresAt: Date.now() + codeTtlMs });
     return code;
   };
 

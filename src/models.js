@@ -41,9 +41,15 @@ const MODEL_ALIASES = {
 
 const DEFAULT_MODEL = "gemini-3";
 
+/** 站点上存在、但 CLI 还没摸到 model_type 的模型：明确报「未接入」而不是「未知模型」。 */
+const UNSUPPORTED_MODELS = { "jimeng-5-flash": "即梦 5.0 Flash" };
+
 export function resolveModel(name) {
   if (!name) return { key: DEFAULT_MODEL, ...MODELS[DEFAULT_MODEL] };
   const raw = String(name).trim();
+  if (UNSUPPORTED_MODELS[raw]) {
+    throw new Error(`${UNSUPPORTED_MODELS[raw]}（${raw}）站点可用，但 CLI 还没摸到它的 model_type，暂不支持`);
+  }
   const key = MODELS[raw] ? raw : MODEL_ALIASES[raw.toLowerCase()] || MODEL_ALIASES[raw];
   if (!key || !MODELS[key]) {
     throw new Error(`未知模型：${name}。可用：${Object.keys(MODELS).join(", ")}`);

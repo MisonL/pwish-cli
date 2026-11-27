@@ -5,6 +5,13 @@
  * 这里只映射能确认语义的字段，其余一律不猜（显示为「—」）。
  */
 
+/** 站点布尔位可能是 "0"/"1"/0/1/false，统一按数值/字符串真值判断。 */
+export function toFlag(value) {
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") return value !== "" && value !== "0" && value.toLowerCase() !== "false";
+  return Boolean(value);
+}
+
 /** 电商模型 → 免费次数字段（第一个有值的生效）。 */
 const MODEL_FIELDS = {
   "gemini-3": ["llm_chat_num_gm30", "llm_chat_num_gem30"],
@@ -93,7 +100,8 @@ export function summarizeQuota(data = {}) {
   }
   return {
     membership: {
-      isVip: Boolean(data.vip) || Boolean(vipQuota.is_vip),
+      // 接口把布尔位当字符串给（"0"/"1"），Boolean("0") 会是 true，必须按数值判断
+      isVip: toFlag(data.vip) || toFlag(vipQuota.is_vip),
       licenseType: vipDetail.license_type || (data.vip ? "vip" : "free"),
       expiredAt: vipDetail.expired_at && vipDetail.expired_at > 1 ? vipDetail.expired_at : null,
       remainedSeconds: vipDetail.remained_seconds || 0,

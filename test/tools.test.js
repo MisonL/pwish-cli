@@ -53,9 +53,44 @@ test("convertFormat 拒绝不支持的格式（不发起网络请求）", async 
   await assert.rejects(() => convertFormat({}, { file: "/tmp/x.png", format: "tiff" }), /不支持的格式/);
 });
 
-test("convertFormat 接受常见格式别名", async () => {
-  // 只验证参数校验阶段：jpeg 会被归一成 jpg，随后才会因为缺少 client 失败
-  await assert.rejects(() => convertFormat({}, { file: "/tmp/x.png", format: "jpeg" }), (err) => !/不支持的格式/.test(err.message));
+test("convertFormat 接受常见格式别名（jpeg → jpg），且真的把 jpg 发出去", async () => {
+  const calls = [];
+  const client = {
+    request: async (reqPath, opts) => {
+      calls.push({ path: reqPath, opts });
+      if (reqPath === "authorizations/oss") {
+        return {
+          data: {
+            bucket: "picwishsz",
+            endpoint: "oss-cn-shenzhen.aliyuncs.com",
+            objects: { "x.png": "pub/x.png" },
+            credential: { access_key_id: "id", access_key_secret: "sec", security_token: "tok" },
+          },
+        };
+      }
+      return { data: { task_id: "t1", state: 1, progress: 100, image: "https://picwishsz.oss-cn-shenzhen.aliyuncs.com/x.jpg" } };
+    },
+  };
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-conv-"));
+  const file = path.join(dir, "x.png");
+  fs.writeFileSync(file, "png");
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, text: async () => JSON.stringify({ data: { resource_id: "rid" } }) });
+  try {
+    await convertFormat(client, { file, format: "jpeg" });
+    const create = calls.find((c) => c.path === "tasks/image-conversion");
+    assert.ok(create, "应当调用格式转换接口");
+    assert.equal(create.opts.body.target_format ?? create.opts.body.format, "jpg");
+  } catch (err) {
+    assert.fail(`别名应正常走通，实际报错：${err.message}`);
+  } finally {
+    globalThis.fetch = realFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("resultUrls 支持扩图的 image1-4 结构，忽略原图占位", () => {

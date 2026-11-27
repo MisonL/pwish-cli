@@ -63,7 +63,7 @@ pwish gen "<提示词>" [-i 参考图 ...] [-m 模型] [-r 比例] [-s 2K] [--mo
 | `-m/--model` | `gemini-3`(默认) `nano-banana-pro` `nano-banana-2-lite` `gpt-image-2` `gpt-image-1.5` `seedream-5-pro` … | `pwish models` 看全表 |
 | `-r/--ratio` | `auto`(默认) `1:1` `3:4` `4:3` `9:16` `16:9` `2:3` `3:2` | 参考图是商品图时，`1:1` 最稳妥 |
 | `-s/--size` | `1K` `2K`(默认) `2K+` | 实际像素由比例×档位决定，2K 约 2048px |
-| `--mode` | `economy`(默认，便宜) `stable`(稳定，贵) | 参数会正确下发，但**只实测过 economy**，stable 的出图/计费差异未验证 |
+| `--mode` | `economy`(默认) `stable`(稳定) | **只有 nano-banana / gpt-image-2 两族会下发 `pattern`**，其余模型传了无效；stable 的出图与计费差异未实测 |
 | `-n` | 整数，默认 1 | 同提示词并发出多张 |
 | `-o/--out` | 目录，默认 `out/` | 下载目录 |
 | `--json` | 开关 | 机器可读输出，便于后续处理 |
@@ -89,7 +89,7 @@ pwish suite -i ./product.jpg \
 | `--selling` | 商品卖点。**写得越具体，成图越准**：产品名 + 核心卖点 + 适用人群 + 期望场景 + 参数 |
 | `--site` | `amazon`(默认) `taobao` `temu` `pdd` `shein` `ozon` `tiktok` `douyin` `shopee` `kuaishou` `xiaohongshu` `ali` `jd` `walmart` `coupang` |
 | `--scenes` | `main`(白底主图) `core`(核心卖点图) `selling`(卖点图) `material`(材质图) `person`(模特展示图) —— 只有这 5 个可用 |
-| `--no-plan` | 跳过 AI 写卖点这一步（自己已想好提示词时用，省一次任务） |
+| `--no-plan` | 跳过「AI 写提示词」这一步，直接把空 prompts 交给出图接口（站点会用默认提示词）。想控制每个场景的文案，目前只能不加该参数、让 AI 写 |
 | `-m --size --ratio` | 同 gen；套图默认 `gemini-3 / 2K / 1:1` |
 
 `--site` 会同时决定站点默认的语言与地区（如 amazon→US/en、taobao→CN/zh、ozon→RU/ru），

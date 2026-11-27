@@ -5,9 +5,22 @@ import path from "node:path";
 import test from "node:test";
 import { collectInputs } from "../src/cli.js";
 
+const dirs = [];
 function tmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "pw-batch-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-batch-"));
+  dirs.push(dir);
+  return dir;
 }
+
+test.after(() => {
+  for (const dir of dirs) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* 清理失败不影响结论 */
+    }
+  }
+});
 
 test("collectInputs 只挑图片，按文件名排序", () => {
   const dir = tmpDir();

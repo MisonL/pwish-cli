@@ -235,8 +235,9 @@ export async function verifyToken(client) {
 }
 
 export async function freeCounts(client, cfg) {
-  const res = await client.request("vips/all-free-counts", {
-    query: { website: cfg?.language === "zh" ? "zh" : "en" },
-  });
+  // 站点按 website 返回不同的计数字段；默认 zh（product_id 482 就是中文站），
+  // 不能因为调用方没传 cfg 就退化成 en。
+  const website = cfg?.language === "en" ? "en" : "zh";
+  const res = await client.request("vips/all-free-counts", { query: { website } });
   return res.data;
 }
