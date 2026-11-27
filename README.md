@@ -39,6 +39,7 @@ pwish suite -i ./mug.jpg --selling "白瓷马克杯 350ml" --scenes main,selling
 | **成本预估** | `--dry-run` 只报告计划与预计消耗，不上传、不建任务、不扣额度 |
 | **结果管理** | 任务查询、历史会话、队列状态、过期链接重下 |
 | **零依赖** | 只用 Node 内置模块，含 LevelDB/Snappy 与 PKCE 的自实现 |
+| **小体积** | npm 包约 79 kB（截图留在仓库不进包，CI 有体积上限守卫） |
 
 ## 安装
 
@@ -78,7 +79,7 @@ CLI 会自动在其中创建 `pwish/` 子目录；`--dir` 已经以 `pwish` 结�
 ```bash
 npm run verify   # = npm run check + npm test（CI 同一套）
 npm run check    # 自检：语法 / 未使用 import / 硬编码凭证 / 输出层规范
-npm test         # node --test，128 个用例
+npm test         # node --test，129 个用例
 npm run test:watch
 ```
 
@@ -114,7 +115,7 @@ pwish login
 
 | 微信扫码 | 密码登录 |
 |---|---|
-| ![微信扫码登录](docs/screenshots/login-qr.png) | ![账号密码登录](docs/screenshots/login-password.png) |
+| ![微信扫码登录](https://raw.githubusercontent.com/MisonL/pwish-cli/main/docs/screenshots/login-qr.png) | ![账号密码登录](https://raw.githubusercontent.com/MisonL/pwish-cli/main/docs/screenshots/login-password.png) |
 
 支持两种方式：
 
@@ -166,6 +167,7 @@ pwish login
 | `PWISH_CONFIG_DIR` | 覆盖配置目录 |
 | `PWISH_DEBUG` | 出错时打印原始响应/堆栈 |
 | `PWISH_QUIET` | 等价于 `--quiet`：只输出结果行 |
+| `NO_COLOR` / `FORCE_COLOR` | `NO_COLOR=1` 关颜色（管道里默认也不出转义码）；`FORCE_COLOR=1` 强制彩色 |
 
 
 ## 会员与额度反馈

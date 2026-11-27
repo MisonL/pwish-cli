@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-27
+
+### Changed
+
+- **npm 包从 698 kB 降到 79 kB**：两张登录截图（616 kB）留在仓库、README 改用 GitHub raw 链接，
+  不再塞进 tarball；新增 `npm run pack:size` 守卫（上限 300 kB），已接入 `verify` 与 CI
+
+### Added
+
+- `NO_COLOR` / `FORCE_COLOR` 支持：管道默认无色，`NO_COLOR=1` 强制关，`FORCE_COLOR=1` 强制开
+
+### Tests
+
+- 新增颜色策略契约测试（128 → 129）
+
 ## [0.17.0] - 2026-11-27
 
 ### Security

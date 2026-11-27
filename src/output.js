@@ -1,6 +1,9 @@
 /** 终端输出层：stdout/stderr 与 ANSI 着色统一从这里走。 */
 
-const tty = Boolean(process.stdout.isTTY);
+// 颜色策略：NO_COLOR 一律关（de facto 标准）；FORCE_COLOR 强制开（CI 里看日志）；
+// 默认看 stdout 是不是终端，管道/重定向时不出转义码。
+const colorEnv = process.env.NO_COLOR ? "never" : process.env.FORCE_COLOR ? "always" : "auto";
+const tty = colorEnv === "always" || (colorEnv === "auto" && Boolean(process.stdout.isTTY));
 
 /** 着色前缀（非 TTY 时为空字符串，保证管道输出干净）。 */
 export const cyan = tty ? "\u001b[36m" : "";

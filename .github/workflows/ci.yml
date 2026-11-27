@@ -22,3 +22,5 @@ jobs:
         run: npm run format:check
       - name: 测试
         run: npm test
+      - name: 包体积
+        run: npm run pack:size

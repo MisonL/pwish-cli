@@ -37,3 +37,11 @@ test("参数错误退出码是 2", () => {
   assert.equal(res.status, 2, res.stderr);
   assert.match(res.stderr, /-n 必须是大于 0 的整数/);
 });
+
+test("NO_COLOR 关掉颜色，FORCE_COLOR 强制开", () => {
+  const noColor = runCLI(["help"], { NO_COLOR: "1" });
+  assert.ok(!noColor.stdout.includes("\u001b["), "NO_COLOR=1 时不应有转义码");
+
+  const forced = runCLI(["help"], { FORCE_COLOR: "1", NO_COLOR: "" });
+  assert.ok(forced.stdout.includes("\u001b["), "FORCE_COLOR=1 时应有转义码");
+});
