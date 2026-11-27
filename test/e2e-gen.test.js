@@ -53,7 +53,13 @@ async function startFakeApi({ tasks = "ok" } = {}) {
   return {
     url: `http://127.0.0.1:${port}`,
     calls,
-    close: () => new Promise((resolve) => server.close(resolve)),
+    close: () =>
+      new Promise((resolve) => {
+        // fetch 的 keep-alive 连接会让 server.close() 一直等；先掐掉再关（Node 24 上尤其明显）
+        server.closeIdleConnections?.();
+        server.closeAllConnections?.();
+        server.close(resolve);
+      }),
   };
 }
 
