@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { netFetch } from "./net.js";
 import { safeName } from "./filename.js";
+import { assertImageBytes } from "./imagebytes.js";
 import path from "node:path";
 import { ApiError } from "./api.js";
 
@@ -161,6 +162,8 @@ export async function downloadImage(url, outDir, basename, fallbackExt = ".png",
   }
   if (!res.ok) throw new Error(`下载失败 HTTP ${res.status}：${safeUrl.slice(0, 120)}`);
   const buf = Buffer.from(await res.arrayBuffer());
+  // HTTP 200 + XML/JSON 错误体（签名过期等）不能当图片落盘
+  assertImageBytes(buf, safeUrl);
   fs.writeFileSync(file, buf);
   return { file, bytes: buf.length };
 }

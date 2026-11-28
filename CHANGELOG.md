@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-11-28
+
+### Fixed
+
+- **HTTP 200 + XML/JSON 错误体被当成图片落盘**：OSS / CDN 在签名过期或对象不存在时可能返回 200
+  加一段 `<Error><Code>AccessDenied</Code></Error>`，此前会直接写成几百字节的「假图片」。
+  现在下载后按魔数校验（PNG/JPEG/WEBP/GIF/BMP），错误时给出开头片段诊断信息且不落盘
+- 换背景内部拉抠图结果也走同一校验（此前只检查 `res.ok`）
+
+### Tests
+
+- 新增 `test/imagebytes.test.js`（4 条）与「HTTP 200 XML 错误体不落盘」用例（146 → 151）
+
 ## [0.19.0] - 2026-11-28
 
 ### Tests

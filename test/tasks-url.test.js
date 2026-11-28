@@ -23,7 +23,13 @@ test("downloadImage 带超时信号，且拒绝白名单外的地址", async () 
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (_url, opts) => {
     seenSignal = opts?.signal;
-    return { ok: true, arrayBuffer: async () => new TextEncoder().encode("x").buffer };
+    return {
+      ok: true,
+      arrayBuffer: async () => {
+        const b = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+        return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+      },
+    };
   };
   try {
     const out = await downloadImage(
@@ -44,4 +50,33 @@ test("downloadImage 带超时信号，且拒绝白名单外的地址", async () 
     () => downloadImage("https://evil.example.com/a.png", dir, "x"),
     /白名单/,
   );
+});
+
+test("downloadImage 遇到 HTTP 200 的 XML 错误体不会落盘", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { downloadImage } = await import("../src/tasks.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-dl2-"));
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => "",
+    arrayBuffer: async () => {
+      const s = '<?xml version="1.0"?><Error><Code>AccessDenied</Code></Error>';
+      return new TextEncoder().encode(s).buffer;
+    },
+  });
+  try {
+    await assert.rejects(
+      () => downloadImage("https://picwishsz.oss-cn-shenzhen.aliyuncs.com/a.png", dir, "x"),
+      /下载结果不是图片.*AccessDenied/,
+    );
+    assert.deepEqual(fs.readdirSync(dir), [], "错误体不能被写成图片文件");
+  } finally {
+    globalThis.fetch = realFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
