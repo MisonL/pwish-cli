@@ -1,4 +1,5 @@
 import { UserError, loadConfig, resolveToken } from "./config.js";
+import { netFetch } from "./net.js";
 
 /** Error codes returned by the backend, mapped to stable CLI error names. */
 const API_ERRORS = {
@@ -77,7 +78,7 @@ export function createClient(overrides = {}) {
     let res;
     let text;
     try {
-      res = await fetch(url, {
+      res = await netFetch(url, {
         method,
         headers: {
           Authorization: `Bearer ${token}`,

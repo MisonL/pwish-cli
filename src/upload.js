@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { netFetch } from "./net.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -101,7 +102,7 @@ async function performUpload(client, abs, prefix) {
     secret: data.credential.access_key_secret,
   });
 
-  const res = await fetch(`https://${host}/${key}`, {
+  const res = await netFetch(`https://${host}/${key}`, {
     signal: AbortSignal.timeout(180_000), // 大图上传可能慢，但必须有上限
     method: "PUT",
     headers: {

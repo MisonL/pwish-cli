@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { netFetch } from "./net.js";
 import os from "node:os";
 import path from "node:path";
 import { uploadFile, uploadFiles } from "./upload.js";
@@ -226,7 +227,7 @@ export async function changeBackground(client, { file, prompt = "", timeoutMs = 
 
   const tmp = path.join(os.tmpdir(), `pwish-cut-${process.pid}-${Date.now()}.png`);
   try {
-    const res = await fetch(assertSafeUrl(cutUrl), { signal: AbortSignal.timeout(120_000) });
+    const res = await netFetch(assertSafeUrl(cutUrl), { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`下载抠图结果失败 HTTP ${res.status}`);
     fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
     const { resourceId } = await uploadFile(client, tmp, PREFIX.general);

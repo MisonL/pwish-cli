@@ -25,12 +25,24 @@ export function log(msg) {
   process.stderr.write(`${msg}\n`);
 }
 
+/** 测试注入点：把结果行收集到内存，避免在用例里改 process.stdout 影响测试报告输出。 */
+let sink = null;
+
+export function setSink(fn) {
+  sink = typeof fn === "function" ? fn : null;
+}
+
+function writeResult(text) {
+  if (sink) sink(text);
+  else process.stdout.write(text);
+}
+
 /** 结果 → stdout。 */
 export function say(msg) {
-  process.stdout.write(`${msg}\n`);
+  writeResult(`${msg}\n`);
 }
 
 /** 机器可读输出。 */
 export function json(obj) {
-  process.stdout.write(`${JSON.stringify(obj, null, 2)}\n`);
+  writeResult(`${JSON.stringify(obj, null, 2)}\n`);
 }

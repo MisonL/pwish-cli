@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { netFetch } from "./net.js";
 import { safeName } from "./filename.js";
 import path from "node:path";
 import { ApiError } from "./api.js";
@@ -154,7 +155,7 @@ export async function downloadImage(url, outDir, basename, fallbackExt = ".png",
   const file = path.join(outDir, `${safeName(basename)}${ext}`);
   let res;
   try {
-    res = await fetch(safeUrl, { signal: AbortSignal.timeout(timeoutMs) });
+    res = await netFetch(safeUrl, { signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
     throw new Error(err.name === "TimeoutError" ? `下载超时（${Math.round(timeoutMs / 1000)}s）` : `下载失败：${err.message}`);
   }

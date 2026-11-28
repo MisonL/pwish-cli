@@ -21,6 +21,7 @@ import {
   resultUrls,
 } from "./tools.js";
 import { log, say, json, cyan, green, yellow, dim, reset, setQuiet } from "./output.js";
+import { timestamp, safeName } from "./filename.js";
 import { loadConfig, saveConfig, readCachedUser, writeCachedUser, UserError, CONFIG_PATH, userIdOfToken } from "./config.js";
 import { createClient, loginWithToken, ApiError } from "./api.js";
 import { startAuthServer, openBrowser } from "./auth-server.js";
