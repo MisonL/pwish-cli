@@ -132,7 +132,8 @@ export function startAuthServer({
     const entry = codes.get(code);
     if (!entry) return { error: "无效的授权码" };
     codes.delete(code);
-    if (Date.now() > entry.expiresAt) return { error: "授权码已过期" };
+    // 用 >= ：TTL 为 0 时应立即过期，而不是「同一毫秒内仍可用」
+    if (Date.now() >= entry.expiresAt) return { error: "授权码已过期" };
     if (!verifyChallenge(pkce.verifier, entry.challenge)) return { error: "PKCE 校验失败" };
     return { token: entry.token };
   };

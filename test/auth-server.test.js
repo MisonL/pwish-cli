@@ -42,8 +42,9 @@ test("base64url 无填充字符", () => {
   assert.ok(!/[+/=]/.test(base64url(Buffer.from([0xfb, 0xff, 0xbf]))));
 });
 
-test("登录页可访问且包含自建登录 UI", async () => {
+test("登录页可访问且包含自建登录 UI", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   const res = await fetch(auth.authorizeUrl);
   assert.equal(res.status, 200);
   const html = await res.text();
@@ -56,18 +57,18 @@ test("登录页可访问且包含自建登录 UI", async () => {
   // 不应再出现旧的书签方案
   assert.doesNotMatch(html, /javascript:\(function/);
   assert.doesNotMatch(html, /localStorage\.getItem/);
-  await auth.close();
 });
 
-test("state 不匹配时拒绝打开授权页", async () => {
+test("state 不匹配时拒绝打开授权页", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   const res = await fetch(`${auth.origin}/authorize?response_type=code&state=wrong`);
   assert.equal(res.status, 400);
-  await auth.close();
 });
 
-test("完整授权码 + PKCE 流程：登录页 → session → callback → token", async () => {
+test("完整授权码 + PKCE 流程：登录页 → session → callback → token", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
 
   // 页面把登录拿到的 token 回传本机服务
@@ -90,11 +91,11 @@ test("完整授权码 + PKCE 流程：登录页 → session → callback → tok
 
   const { token } = await auth.waitForToken();
   assert.equal(token, TOKEN);
-  await auth.close();
 });
 
-test("session 拒绝非法 token", async () => {
+test("session 拒绝非法 token", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
   const res = await fetch(`${auth.origin}/session`, {
     method: "POST",
@@ -102,11 +103,11 @@ test("session 拒绝非法 token", async () => {
     body: JSON.stringify({ token: "not-a-token", state: stateOf(auth) }),
   });
   assert.equal(res.status, 400);
-  await auth.close();
 });
 
-test("session 拒绝错误 state", async () => {
+test("session 拒绝错误 state", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
   const res = await fetch(`${auth.origin}/session`, {
     method: "POST",
@@ -115,11 +116,11 @@ test("session 拒绝错误 state", async () => {
   });
   assert.equal(res.status, 400);
   assert.match((await res.json()).message, /state/);
-  await auth.close();
 });
 
-test("授权码一次性：服务还活着时重放就被拒绝", async () => {
+test("授权码一次性：服务还活着时重放就被拒绝", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
   const session = await fetch(`${auth.origin}/session`, {
     method: "POST",
@@ -141,8 +142,9 @@ test("授权码一次性：服务还活着时重放就被拒绝", async () => {
   assert.equal(token, TOKEN);
 });
 
-test("非本机 Host 被拒绝（DNS rebinding 防护）", async () => {
+test("非本机 Host 被拒绝（DNS rebinding 防护）", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   const status = await new Promise((resolve, reject) => {
     const req = http.request(
       { host: "127.0.0.1", port: auth.port, path: "/authorize", headers: { Host: "evil.example:6666" } },
@@ -155,11 +157,11 @@ test("非本机 Host 被拒绝（DNS rebinding 防护）", async () => {
     req.end();
   });
   assert.equal(status, 403);
-  await auth.close();
 });
 
-test("超时会 reject", async () => {
+test("超时会 reject", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 150 });
+  t.after(() => auth.close());
   await assert.rejects(() => auth.waitForToken(), /超时/);
 });
 
@@ -167,17 +169,18 @@ test("CODE_TTL 为 60 秒", () => {
   assert.equal(CODE_TTL_MS, 60_000);
 });
 
-test("端口占用时给出可读的错误提示", async () => {
+test("端口占用时给出可读的错误提示", async (t) => {
   const a = await startAuthServer({ timeoutMs: 5000 });
+  t.after(() => a.close());
   await assert.rejects(
     () => startAuthServer({ timeoutMs: 5000, port: a.port }),
     /端口 .* 已被占用/,
   );
-  await a.close();
 });
 
-test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游网络）", async () => {
+test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游网络）", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
   const res = await fetch(`${auth.origin}/api/qrcode/poll`, {
     method: "POST",
@@ -188,11 +191,11 @@ test("/api/* 请求体损坏时返回 JSON 且带可读错误（不依赖上游�
   assert.equal(res.status, 500);
   const body = await res.json();
   assert.match(body.message, /请求格式不正确/);
-  await auth.close();
 });
 
-test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", async () => {
+test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000, codeTtlMs: 0 });
+  t.after(() => auth.close());
   await openPage(auth);
   const session = await fetch(`${auth.origin}/session`, {
     method: "POST",
@@ -203,11 +206,11 @@ test("CODE_TTL 到期后授权码被拒（用 0 秒 TTL 验证过期分支）", 
   const res = await fetch(redirect);
   assert.equal(res.status, 400);
   assert.match(await res.text(), /过期/);
-  await auth.close();
 });
 
-test("登录相关接口必须带匹配的 state，本机其他进程不能凭空轮询二维码", async () => {
+test("登录相关接口必须带匹配的 state，本机其他进程不能凭空轮询二维码", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
 
   const noState = await fetch(`${auth.origin}/api/qrcode`, { method: "POST" });
@@ -226,21 +229,20 @@ test("登录相关接口必须带匹配的 state，本机其他进程不能凭�
     body: JSON.stringify({ account: "a", password: "b" }),
   });
   assert.equal(badPassword.status, 400);
-
-  await auth.close();
 });
 
-test("/health 不回显 state", async () => {
+test("/health 不回显 state", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   const res = await fetch(`${auth.origin}/health`);
   const body = await res.json();
   assert.equal(body.ok, true);
   assert.equal(body.state, undefined);
-  await auth.close();
 });
 
-test("不是打开登录页的那个 UA 一律 403（本机其他进程拿到 state 也没用）", async () => {
+test("不是打开登录页的那个 UA 一律 403（本机其他进程拿到 state 也没用）", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
 
   const res = await fetch(`${auth.origin}/session`, {
@@ -250,11 +252,11 @@ test("不是打开登录页的那个 UA 一律 403（本机其他进程拿到 st
   });
   assert.equal(res.status, 403);
   assert.match((await res.json()).message, /不是来自登录页/);
-  await auth.close();
 });
 
-test("凭据只交接一次：第二次 /session 返回 409", async () => {
+test("凭据只交接一次：第二次 /session 返回 409", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000 });
+  t.after(() => auth.close());
   await openPage(auth);
 
   const post = () =>
@@ -266,11 +268,11 @@ test("凭据只交接一次：第二次 /session 返回 409", async () => {
 
   assert.equal((await post()).status, 200);
   assert.equal((await post()).status, 409);
-  await auth.close();
 });
 
-test("二维码轮询有节流，短时间内连刷返回 429", async () => {
+test("二维码轮询有节流，短时间内连刷返回 429", async (t) => {
   const auth = await startAuthServer({ timeoutMs: 8000, pollQr: async () => ({ status: "waiting" }) });
+  t.after(() => auth.close());
   await openPage(auth);
   const poll = () =>
     fetch(`${auth.origin}/api/qrcode/poll`, {
@@ -282,5 +284,4 @@ test("二维码轮询有节流，短时间内连刷返回 429", async () => {
   assert.notEqual(first.status, 429);
   const second = await poll();
   assert.equal(second.status, 429);
-  await auth.close();
 });

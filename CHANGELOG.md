@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.18.9] - 2026-11-28
+
+### Fixed
+
+- **CI 挂起的真正根因**：`test/auth-server.test.js` 里的用例若在 `await auth.close()` 之前断言失败，
+  监听中的 HTTP server 就把测试进程挂住，runner 一直等到 job 超时（0.18.6/0.18.7 各挂 10~12 分钟）。
+  改为统一在 `t.after()` 里关闭，失败也会清理
+- **授权码 TTL 边界**：`Date.now() > expiresAt` 改为 `>=`，否则 `codeTtlMs: 0` 在同一毫秒内仍能兑换成功
+  （CI 上偶发 `200 !== 400`）
+
+### Chore
+
+- 测试恢复并行执行（根因已修，串行不再必要）；保留 `--test-timeout=120000` 与 CI job `timeout-minutes: 12` 兜底
+- 本地连跑 15 次 auth-server 用例全绿验证不再抖动
+
 ## [0.18.8] - 2026-11-28
 
 ### Chore
