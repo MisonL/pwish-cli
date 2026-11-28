@@ -134,6 +134,21 @@ function extFromUrl(url, fallback) {
 /** 只允许从这些域名下载/拉取结果，避免任务响应里的地址把请求带到任意主机。 */
 const ALLOWED_HOSTS = [/(^|\.)aliyuncs\.com$/i, /(^|\.)aoscdn\.com$/i, /(^|\.)picwish\.cn$/i];
 
+/**
+ * 原子落盘：先写同目录临时文件再 rename。
+ * 中途崩溃/磁盘满时不会留下半截文件被后续误当成完整图片。
+ */
+export function writeFileAtomic(file, buf) {
+  const tmp = `${file}.${process.pid}.part`;
+  try {
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    throw err;
+  }
+}
+
 export function assertSafeUrl(raw) {
   let parsed;
   try {
@@ -164,7 +179,7 @@ export async function downloadImage(url, outDir, basename, fallbackExt = ".png",
   const buf = Buffer.from(await res.arrayBuffer());
   // HTTP 200 + XML/JSON 错误体（签名过期等）不能当图片落盘
   assertImageBytes(buf, safeUrl);
-  fs.writeFileSync(file, buf);
+  writeFileAtomic(file, buf);
   return { file, bytes: buf.length };
 }
 

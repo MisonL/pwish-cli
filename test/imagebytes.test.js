@@ -33,3 +33,41 @@ test("WEBP 必须是 RIFF + WEBP 双标记", () => {
   const fake = Buffer.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x4a, 0x50, 0x47, 0x00]);
   assert.equal(sniffImageExt(fake), null);
 });
+
+test("writeFileAtomic 先写临时文件再改名，不留半截文件", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { writeFileAtomic } = await import("../src/tasks.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-atomic-"));
+  const target = path.join(dir, "x.png");
+  try {
+    writeFileAtomic(target, Buffer.from([1, 2, 3]));
+    assert.deepEqual([...fs.readFileSync(target)], [1, 2, 3]);
+    assert.deepEqual(fs.readdirSync(dir), ["x.png"], "不应残留 .part 文件");
+
+    // 覆盖已有文件也走同一条路径
+    writeFileAtomic(target, Buffer.from([9]));
+    assert.deepEqual([...fs.readFileSync(target)], [9]);
+    assert.deepEqual(fs.readdirSync(dir), ["x.png"]);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("writeFileAtomic 目标目录不可写时报错且不留下临时文件", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { writeFileAtomic } = await import("../src/tasks.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-atomic2-"));
+  try {
+    // 目标路径的父目录不存在 → 写入失败
+    assert.throws(() => writeFileAtomic(path.join(dir, "missing", "x.png"), Buffer.from([1])));
+    assert.deepEqual(fs.readdirSync(dir), [], "失败后不应残留文件");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

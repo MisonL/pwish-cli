@@ -38,6 +38,7 @@ export function ossV1Signature({ verb, contentMd5 = "", mime, date, ossHeaders, 
  * resource_id 的有效期由服务端决定，跨进程复用有拿到已失效资源的风险。
  */
 const uploadMemo = new Map();
+const UPLOAD_MEMO_LIMIT = 200; // 批量跑上千张图时，避免缓存无限增长
 
 export async function uploadFile(client, file, prefix = "pub/tasks/input/llm_chats") {
   const abs = path.resolve(file);
@@ -50,6 +51,11 @@ export async function uploadFile(client, file, prefix = "pub/tasks/input/llm_cha
   if (cached) return cached;
 
   const pending = performUpload(client, abs, prefix);
+  if (uploadMemo.size >= UPLOAD_MEMO_LIMIT) {
+    // 简单 FIFO 淘汰：最老的键先出队（Map 保持插入顺序）
+    const oldest = uploadMemo.keys().next().value;
+    if (oldest !== undefined) uploadMemo.delete(oldest);
+  }
   uploadMemo.set(memoKey, pending);
   try {
     return await pending;

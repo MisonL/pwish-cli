@@ -1,6 +1,6 @@
 {
   "name": "pwish-cli",
-  "version": "0.19.1",
+  "version": "0.19.2",
   "description": "佐糖 AI 设计师（picwish.cn）命令行工具：一句话出电商图、商品图成套出图，自动下载结果",
   "type": "module",
   "bin": {

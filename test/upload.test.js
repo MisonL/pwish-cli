@@ -127,3 +127,50 @@ test("上传授权返回非阿里云 OSS 域名时拒绝，避免把文件 PUT �
   };
   await assert.rejects(() => uploadFile(client, file), /意外的 OSS 域名/);
 });
+
+test("上传缓存有上限，长跑批量任务不会无限增长", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { uploadFile } = await import("../src/upload.js");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pw-up3-"));
+  let seq = 0;
+  // 授权接口按请求里的 filenames 回 objects（每个文件的名字不同）
+  const client = {
+    request: async (_path, opts) => {
+      const names = opts?.body?.filenames || [];
+      const objects = {};
+      for (const n of names) objects[n] = `pub/${++seq}.png`;
+      return {
+        data: {
+          bucket: "picwishsz",
+          endpoint: "oss-cn-shenzhen.aliyuncs.com",
+          objects,
+          credential: { access_key_id: "id", access_key_secret: "sec", security_token: "tok" },
+        },
+      };
+    },
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ data: { resource_id: "rid" } }) });
+
+  try {
+    // 造 210 个不同文件，超过 200 的上限
+    const files = [];
+    for (let i = 0; i < 210; i += 1) {
+      const f = path.join(dir, `f${i}.png`);
+      fs.writeFileSync(f, `bytes-${i}`);
+      files.push(f);
+    }
+    for (const f of files) await uploadFile(client, f);
+
+    // 再传一次第一个文件：已被淘汰，应当重新上传（seq 继续增长）
+    const before = seq;
+    await uploadFile(client, files[0]);
+    assert.ok(seq > before, "被淘汰的缓存项应重新上传，而不是无限保留");
+  } finally {
+    globalThis.fetch = realFetch;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

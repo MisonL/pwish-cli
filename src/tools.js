@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { netFetch } from "./net.js";
+import { assertImageBytes } from "./imagebytes.js";
 import os from "node:os";
 import path from "node:path";
 import { uploadFile, uploadFiles } from "./upload.js";
@@ -229,7 +230,9 @@ export async function changeBackground(client, { file, prompt = "", timeoutMs = 
   try {
     const res = await netFetch(assertSafeUrl(cutUrl), { signal: AbortSignal.timeout(120_000) });
     if (!res.ok) throw new Error(`下载抠图结果失败 HTTP ${res.status}`);
-    fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
+    const cutBuf = Buffer.from(await res.arrayBuffer());
+    assertImageBytes(cutBuf, cutUrl); // 抠图结果也可能是错误体
+    fs.writeFileSync(tmp, cutBuf);
     const { resourceId } = await uploadFile(client, tmp, PREFIX.general);
     const body = { source_resource_id: resourceId };
     if (prompt) body.prompt = prompt;
