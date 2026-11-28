@@ -5,6 +5,44 @@
 
 ## [Unreleased]
 
+## [0.18.6] - 2026-11-28
+
+### Docs
+
+- 补齐 0.18.3 / 0.18.4 / 0.18.5 的 CHANGELOG 条目（前两次发版只改代码、漏写记录）
+- README 测试数量同步到 143
+
+## [0.18.5] - 2026-11-28
+
+### Fixed（严重回归）
+
+- **0.18.1 起所有带下载的命令都会崩**：重构时间戳时漏了 `timestamp()` / `safeName()` 的 import，
+  任何 `cutout / upscale / whitebg / suite / detail / gen`（未显式 `--no-download`）都会抛
+  `timestamp is not defined`。0.18.1~0.18.4 受影响，本版修复
+- 用真实接口复跑抠图确认下载恢复（302 KB PNG 落盘）
+
+### Tests
+
+- 新增 `test/e2e-tools.test.js`（4 条端到端）：`whitebg` 完整链路（2 图上传 → 建任务 → 轮询 → 落盘，
+  断言 `source_resource_ids` 长度 2、`from=product-restore`）、`whitebg` 单图零请求、
+  `batch cutout --concurrency 2 --json`（3 文件、JSON 可解析、实测并发峰值 ≤ 2）、`batch` 未知工具零请求
+- 新增两个测试注入点：`src/net.js`（`setFetch` 替换 HTTP 出口）、`src/output.js`
+  （`setSink` 收集结果行，避免改 `process.stdout` 吞掉测试报告）
+- 测试 139 → 143
+
+## [0.18.4] - 2026-11-27
+
+### Fixed
+
+- 假服务关闭改为「先 `closeAllConnections()` 再 `close()` + 3s 兜底计时器（`unref()`）」：
+  keep-alive 连接会让 `server.close()` 在 CI 的 Node 22/24 上间歇挂住，两次挂起 7~16 分钟
+
+## [0.18.3] - 2026-11-27
+
+### Fixed
+
+- 假服务关闭时先 `closeAllConnections()` 再 `close()`（第一次修复，Node 22 仍会挂，见 0.18.4）
+
 ## [0.18.2] - 2026-11-27
 
 ### Fixed
