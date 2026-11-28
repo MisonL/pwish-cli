@@ -5,6 +5,21 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-28
+
+### Tests
+
+- 端到端用例扩到 7 条（143 → 146），新增：
+  - `upscale --type text --scale 2`：断言 `type=2` / `scale_factor=2` 正确下发，落盘为 `.jpg`
+  - `translate --from CHS --to ENG`：断言语言码下发，并从 `images[].image` 取结果
+  - `translate --from auto`：本地拦下（退出码 1），且**不上传、不建任务**（只允许额度预检那一次查询）
+- 假接口按各工具真实响应结构返回：商品还原/抠图 `answer[]`、翻译 `images[]`、变清晰 `image`
+
+### Verified（真实接口）
+
+- `upscale`：170 KB JPG，额度计数未变（100）
+- `translate`：102 KB JPG，`本次 消耗 1`（5 → 4），确认下载路径与结果解析正常
+
 ## [0.18.9] - 2026-11-28
 
 ### Fixed

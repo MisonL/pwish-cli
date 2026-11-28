@@ -61,17 +61,23 @@ function fakeApi({ answerFor = () => "out.png", onCreate } = {}) {
       const key = u.slice(OSS_HOST.length + 1);
       return json({ data: { resource_id: `rid-${key}` } });
     }
-    if (method === "POST" && /tasks\/login\/(external\/gem-image-edit|segmentation)$/.test(new URL(u).pathname)) {
+    if (method === "POST" && /tasks\/login\/(external\/gem-image-edit|external\/image-translate|scale|segmentation)$/.test(new URL(u).pathname)) {
       const body = safeJson(init.body);
       onCreate?.({ path: new URL(u).pathname, body });
       return json({ status: 200, data: { task_id: `task-${calls.length}` } });
     }
-    const pollMatch = u.match(/tasks\/login\/(external\/gem-image-edit|segmentation)\/(task-\d+)/);
+    const pollMatch = u.match(/tasks\/login\/(external\/gem-image-edit|external\/image-translate|scale|segmentation)\/(task-\d+)/);
     if (pollMatch) {
-      return json({
-        status: 200,
-        data: { task_id: pollMatch[2], state: 1, progress: 100, answer: [{ file: `${OSS_HOST}/${answerFor()}` }] },
-      });
+      const endpoint = pollMatch[1];
+      const file = `${OSS_HOST}/${answerFor()}`;
+      // 各接口返回结构不同：商品还原/抠图用 answer[]，翻译用 images[]，变清晰用 image
+      const data =
+        endpoint === "external/image-translate"
+          ? { task_id: pollMatch[2], images: [{ image: file }] }
+          : endpoint === "scale"
+            ? { task_id: pollMatch[2], image: file }
+            : { task_id: pollMatch[2], answer: [{ file }] };
+      return json({ status: 200, data: { state: 1, progress: 100, ...data } });
     }
     if (u.startsWith(`${OSS_HOST}/out`)) return png(u);
     throw new Error(`假接口没有模拟：${method} ${u}`);
@@ -229,4 +235,64 @@ test("batch 遇到未知工具：退出码 2，且不发请求", async (t) => {
   assert.equal(res.code, 2);
   assert.match(res.out, /未知工具|可用工具/);
   assert.equal(api.calls.length, 0);
+});
+
+
+test("upscale 端到端：--type text --scale 2 正确下发并落盘 .jpg", async (t) => {
+  const { outDir, a } = setup(t);
+  const bodies = [];
+  const api = fakeApi({ answerFor: () => "up.jpg", onCreate: (x) => bodies.push(x) });
+  setFetch(api.impl);
+
+  const res = await withEnv({ PWISH_TOKEN: TOKEN, PWISH_API_BASE: "http://127.0.0.1:1/api" }, () =>
+    capture(() => main(["upscale", a, "--type", "text", "--scale", "2", "-o", outDir])),
+  );
+
+  assert.equal(res.code, 0, res.out);
+  const created = bodies.find((b) => b.path.endsWith("/tasks/login/scale"));
+  assert.ok(created, "应该调用变清晰接口");
+  assert.equal(created.body.type, 2, "text 应映射成 type=2");
+  assert.equal(created.body.scale_factor, 2);
+
+  const files = fs.readdirSync(outDir);
+  assert.equal(files.length, 1);
+  assert.ok(files[0].endsWith(".jpg"), `变清晰默认输出 jpg：${files[0]}`);
+});
+
+test("translate 端到端：语言码下发、从 images[].image 取结果", async (t) => {
+  const { outDir, a } = setup(t);
+  const bodies = [];
+  const api = fakeApi({ answerFor: () => "trans.jpg", onCreate: (x) => bodies.push(x) });
+  setFetch(api.impl);
+
+  const res = await withEnv({ PWISH_TOKEN: TOKEN, PWISH_API_BASE: "http://127.0.0.1:1/api" }, () =>
+    capture(() => main(["translate", a, "--from", "CHS", "--to", "ENG", "-o", outDir, "--json"])),
+  );
+
+  assert.equal(res.code, 0, res.out);
+  const payload = JSON.parse(res.out);
+  assert.equal(payload.images.length, 1);
+
+  const created = bodies.find((b) => b.path.endsWith("/tasks/login/external/image-translate"));
+  assert.ok(created, "应该调用图片翻译接口");
+  assert.equal(created.body.source_language, "CHS");
+  assert.equal(created.body.target_language, "ENG");
+  assert.deepEqual(created.body.source_resource_ids.length, 1);
+  assert.equal(fs.readdirSync(outDir).length, 1);
+});
+
+test("translate 拒绝 auto 源语言：本地拦下、零请求", async (t) => {
+  const { outDir, a } = setup(t);
+  const api = fakeApi();
+  setFetch(api.impl);
+
+  const res = await withEnv({ PWISH_TOKEN: TOKEN, PWISH_API_BASE: "http://127.0.0.1:1/api" }, () =>
+    capture(() => main(["translate", a, "--from", "auto", "--to", "ENG", "-o", outDir])),
+  );
+
+  assert.equal(res.code, 1);
+  assert.match(res.out, /不支持自动识别源语言/);
+  // 额度预检会查一次 free-counts，除此之外不应上传或建任务
+  const wasteful = api.calls.filter((c) => /authorizations\/oss|image-translate/.test(c.url));
+  assert.equal(wasteful.length, 0, "本地拦下后不应上传或建任务");
 });
