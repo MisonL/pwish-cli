@@ -296,3 +296,47 @@ test("translate 拒绝 auto 源语言：本地拦下、零请求", async (t) => 
   const wasteful = api.calls.filter((c) => /authorizations\/oss|image-translate/.test(c.url));
   assert.equal(wasteful.length, 0, "本地拦下后不应上传或建任务");
 });
+
+
+test("下载失败会自动重试，成功后照常落盘", async (t) => {
+  const { outDir, a } = setup(t);
+  const api = fakeApi({ answerFor: () => "ok.png" });
+  let attempts = 0;
+  setFetch(async (url, init) => {
+    // 只让结果下载的第一次失败
+    if (String(url).includes("/ok.png")) {
+      attempts += 1;
+      if (attempts === 1) return { ok: false, status: 502, text: async () => "bad gateway" };
+    }
+    return api.impl(url, init);
+  });
+
+  const res = await withEnv({ PWISH_TOKEN: TOKEN, PWISH_API_BASE: "http://127.0.0.1:1/api" }, () =>
+    capture(() => main(["cutout", a, "-o", outDir])),
+  );
+
+  assert.equal(res.code, 0, res.out);
+  assert.equal(attempts, 2, "第一次失败后应重试一次");
+  assert.equal(fs.readdirSync(outDir).length, 1);
+});
+
+test("下载始终失败时：退出码 7、保留 URL、不吞掉已生成的结果", async (t) => {
+  const { outDir, a } = setup(t);
+  const api = fakeApi({ answerFor: () => "dead.png" });
+  setFetch(async (url, init) => {
+    if (String(url).includes("/dead.png")) return { ok: false, status: 403, text: async () => "denied" };
+    return api.impl(url, init);
+  });
+
+  const res = await withEnv({ PWISH_TOKEN: TOKEN, PWISH_API_BASE: "http://127.0.0.1:1/api" }, () =>
+    capture(() => main(["cutout", a, "-o", outDir, "--json"])),
+  );
+
+  assert.equal(res.code, 7, res.out);
+  const payload = JSON.parse(res.out);
+  assert.equal(payload.images.length, 1, "生成的 URL 必须保留");
+  assert.equal(payload.files.length, 0);
+  assert.equal(payload.downloadsFailed.length, 1);
+  assert.match(payload.downloadsFailed[0].url, /dead\.png/);
+  assert.deepEqual(fs.readdirSync(outDir), [], "失败不应留下文件");
+});

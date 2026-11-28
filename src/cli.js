@@ -433,6 +433,25 @@ function toolOptions(name, args, image) {
 }
 
 /** 跑一个工具并下载结果；返回 { taskId, urls, saved }。 */
+/**
+ * 结果下载：网络抖动重试 2 次。
+ *
+ * 生成成功但下载失败时，额度已经消耗掉了——这时候把 URL 丢掉、整个命令失败是最糟的体验。
+ * 所以下载失败要收集起来，最后连同 URL 一起报给用户，让他们能自己去取。
+ */
+async function downloadWithRetry(url, outDir, base, ext, { retries = 2 } = {}) {
+  let last;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await downloadImage(url, outDir, base, ext);
+    } catch (err) {
+      last = err;
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  throw last;
+}
+
 async function runToolOnce(client, name, image, args, { quiet = false } = {}) {
   const tool = TOOLS[name];
   const outDir = args.flags.out || args.flags.o || loadConfig().outDir;
@@ -444,15 +463,20 @@ async function runToolOnce(client, name, image, args, { quiet = false } = {}) {
   if (!urls.length) throw new ApiError(`${tool.label}未返回图片`, { code: "NO_RESULT", payload: data });
 
   const saved = [];
+  const downloadFailed = [];
   if (!args.flags["no-download"]) {
     const stamp = timestamp();
     for (const [i, url] of urls.entries()) {
       const ext = tool.ext || `.${opts.format || "png"}`;
       const base = `${safeName(path.basename(image, path.extname(image)))}-${name}${urls.length > 1 ? `-${i + 1}` : ""}-${stamp}`;
-      saved.push(await downloadImage(url, outDir, base, ext));
+      try {
+        saved.push(await downloadWithRetry(url, outDir, base, ext));
+      } catch (err) {
+        downloadFailed.push({ url, error: err.message });
+      }
     }
   }
-  return { taskId, urls, saved };
+  return { taskId, urls, saved, downloadFailed };
 }
 
 async function cmdTool(name, args) {
@@ -502,16 +526,21 @@ async function cmdTool(name, args) {
     force: Boolean(args.flags.force),
   });
 
-  const { taskId, urls, saved } = await runToolOnce(client, name, image, args);
+  const { taskId, urls, saved, downloadFailed } = await runToolOnce(client, name, image, args);
 
   if (args.flags.json) {
-    json({ tool: name, taskId, images: urls, files: saved.map((d) => d.file) });
-    return 0;
+    json({ tool: name, taskId, images: urls, files: saved.map((d) => d.file), downloadsFailed: downloadFailed });
+    return downloadFailed.length ? 7 : 0;
   }
   say(`${green}✓ ${tool.label}完成${taskId ? `  任务: ${taskId}` : ""}`);
   for (const d of saved) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   if (args.flags["no-download"]) for (const u of urls) say(`  ${u}`);
   await quotaAfterRun(client, { kind: "tool", key: name, label: tool.label, before });
+  if (downloadFailed.length) {
+    say(`${yellow}! ${downloadFailed.length} 张下载失败（额度已消耗），可用下面的 URL 手动重取：${reset}`);
+    for (const f of downloadFailed) say(`  ${f.url} ${dim}(${f.error})${reset}`);
+    return 7;
+  }
   return 0;
 }
 
@@ -688,6 +717,7 @@ async function runGenOnce(client, { prompt, image, conversationId, model, ratio,
   const saved = [];
   const urls = [];
   const errors = [];
+  const downloadFailed = [];
   for (const taskId of taskIds) {
     const item = done.get(taskId);
     const imgs = imagesOf(item);
@@ -700,10 +730,14 @@ async function runGenOnce(client, { prompt, image, conversationId, model, ratio,
       if (!download) continue;
       const stamp = timestamp();
       const base = `${stamp}-${taskId.slice(0, 8)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
-      saved.push(await downloadImage(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png"));
+      try {
+        saved.push(await downloadWithRetry(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png"));
+      } catch (err) {
+        downloadFailed.push({ url: img.url, taskId, error: err.message });
+      }
     }
   }
-  return { taskIds, urls, saved, errors };
+  return { taskIds, urls, saved, errors, downloadFailed };
 }
 
 async function cmdGenBatch(args) {
@@ -785,6 +819,7 @@ async function cmdGenBatch(args) {
           urls: out.urls,
           files: out.saved.map((d) => d.file),
           errors: out.errors,
+          downloadsFailed: out.downloadFailed,
         };
         const line = `${green}✓${reset} ${label} → ${out.saved.map((d) => path.basename(d.file)).join(", ") || `${out.urls.length} 张（未下载）`}`;
         args.flags.json ? log(line) : say(line);
@@ -912,13 +947,17 @@ async function cmdGen(args) {
   }
 
   const downloaded = [];
+  const downloadFailed = [];
   if (!args.flags["no-download"]) {
     const stamp = timestamp();
     for (const r of results) {
       for (const [i, img] of r.images.entries()) {
         const base = `${stamp}-${r.taskId.slice(0, 8)}${r.images.length > 1 ? `-${i + 1}` : ""}`;
-        const saved = await downloadImage(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png");
-        downloaded.push(saved);
+        try {
+          downloaded.push(await downloadWithRetry(img.url, outDir, base, format === "jpeg" ? ".jpg" : ".png"));
+        } catch (err) {
+          downloadFailed.push({ url: img.url, taskId: r.taskId, error: err.message });
+        }
       }
     }
   }
@@ -931,18 +970,23 @@ async function cmdGen(args) {
       images: results.flatMap((r) => r.images.map((img) => ({ taskId: r.taskId, url: img.url, file: downloaded.find((d) => d.file.includes(r.taskId.slice(0, 8)))?.file || null }))),
       files: downloaded.map((d) => d.file),
       failed: results.filter((r) => !r.ok).map((r) => ({ taskId: r.taskId, error: r.error })),
+      downloadsFailed: downloadFailed,
     });
-    return okCount === results.length ? 0 : 7;
+    return okCount === results.length && !downloadFailed.length ? 0 : 7;
   }
 
   say(`${green}✓ 完成 ${okCount}/${results.length} 张  会话: ${conversations}`);
   for (const d of downloaded) say(`  ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   await quotaAfterRun(client, { kind: "model", key: model.key, label: model.key, before });
   for (const r of results.filter((x) => !x.ok)) say(`  ${yellow}! ${r.taskId} 失败: ${r.error || "无图片返回"}`);
+  if (downloadFailed.length) {
+    say(`${yellow}! ${downloadFailed.length} 张下载失败（额度已消耗），可用下面的 URL 手动重取：${reset}`);
+    for (const f of downloadFailed) say(`  ${f.url} ${dim}(${f.error})${reset}`);
+  }
   if (args.flags["no-download"]) {
     for (const r of results) for (const img of r.images) say(`  ${img.url}`);
   }
-  return okCount === results.length ? 0 : 7;
+  return okCount === results.length && !downloadFailed.length ? 0 : 7;
 }
 
 async function cmdSuite(args) {
@@ -1034,13 +1078,17 @@ async function cmdSuite(args) {
   }
 
   const downloaded = [];
+  const downloadFailed = [];
   if (!args.flags["no-download"]) {
     const stamp = timestamp();
     for (const [scene, imgs] of Object.entries(byScene)) {
       for (const [i, img] of imgs.entries()) {
         const base = `${stamp}-suite-${safeName(scene)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
-        const saved = await downloadImage(img.url, outDir, base, ".png");
-        downloaded.push({ scene, ...saved });
+        try {
+          downloaded.push({ scene, ...(await downloadWithRetry(img.url, outDir, base, ".png")) });
+        } catch (err) {
+          downloadFailed.push({ scene, url: img.url, error: err.message });
+        }
       }
     }
   }
@@ -1053,15 +1101,21 @@ async function cmdSuite(args) {
       site,
       scenes: byScene,
       files: downloaded.map((d) => ({ scene: d.scene, file: d.file })),
+      downloadsFailed: downloadFailed,
       prompts,
       sellingPoints,
     });
-    return 0;
+    return downloadFailed.length ? 7 : 0;
   }
 
   say(`${green}✓ 套图完成 ${total} 张  会话: ${out.conversationId}`);
   for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   await quotaAfterRun(client, { kind: "design", key: "suite", label: "套图", before });
+  if (downloadFailed.length) {
+    say(`${yellow}! ${downloadFailed.length} 张下载失败（额度已消耗），可用下面的 URL 手动重取：${reset}`);
+    for (const f of downloadFailed) say(`  [${f.scene}] ${f.url} ${dim}(${f.error})${reset}`);
+    return 7;
+  }
   return 0;
 }
 
@@ -1153,13 +1207,17 @@ async function cmdDetail(args) {
   if (!total) throw new ApiError("详情图任务完成但没有返回图片", { code: "GENERATION_FAILED", payload: out.raw });
 
   const downloaded = [];
+  const downloadFailed = [];
   if (!args.flags["no-download"]) {
     const stamp = timestamp();
     for (const [scene, imgs] of Object.entries(byScene)) {
       for (const [i, img] of imgs.entries()) {
         const base = `${stamp}-detail-${safeName(scene)}${imgs.length > 1 ? `-${i + 1}` : ""}`;
-        const saved = await downloadImage(img.url, outDir, base, ".png");
-        downloaded.push({ scene, ...saved });
+        try {
+          downloaded.push({ scene, ...(await downloadWithRetry(img.url, outDir, base, ".png")) });
+        } catch (err) {
+          downloadFailed.push({ scene, url: img.url, error: err.message });
+        }
       }
     }
   }
@@ -1172,15 +1230,21 @@ async function cmdDetail(args) {
       site,
       scenes: byScene,
       files: downloaded.map((d) => ({ scene: d.scene, file: d.file })),
+      downloadsFailed: downloadFailed,
       prompts,
       sellingPoints: selling,
     });
-    return 0;
+    return downloadFailed.length ? 7 : 0;
   }
 
   say(`${green}✓ 详情图完成 ${total} 张  会话: ${out.conversationId}`);
   for (const d of downloaded) say(`  [${d.scene}] ${d.file} ${dim}(${(d.bytes / 1024).toFixed(0)} KB)`);
   await quotaAfterRun(client, { kind: "design", key: "detail", label: "详情图", before });
+  if (downloadFailed.length) {
+    say(`${yellow}! ${downloadFailed.length} 张下载失败（额度已消耗），可用下面的 URL 手动重取：${reset}`);
+    for (const f of downloadFailed) say(`  [${f.scene}] ${f.url} ${dim}(${f.error})${reset}`);
+    return 7;
+  }
   return 0;
 }
 
