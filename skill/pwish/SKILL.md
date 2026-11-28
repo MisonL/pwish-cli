@@ -200,6 +200,7 @@ pwish queue                       # 服务端队列状态
 | `INVALID_WORDS` / `IMAGE_POLICY_VIOLATION` | 提示词/图片违规。**改写提示词**（去掉品牌名、真人明星、敏感词），不要原样重试 |
 | `SENSITIVE_IMAGE` | 参考图被判敏感，换一张图 |
 | `UNAUTHORIZED` / 退出码 3 | 登录态过期 → 重新 `pwish login` |
+| 退出码 7 | 部分成功：有任务失败或下载失败。**看输出里的 URL**（额度已消耗，别重复生成）；`--json` 读 `downloadsFailed` |
 | 等待超时（退出码 1） | 任务还在排队：用 `pwish task <id>` 或 `pwish queue` 看，别重复提交 |
 | `INVALID_PARAM` | 参数不对：检查 `--ratio/--size/--scenes` 取值 |
 
