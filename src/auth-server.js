@@ -330,7 +330,13 @@ export function startAuthServer({
       } catch {
         /* 老版本 Node 无这两个方法 */
       }
-      server.close(() => resolve());
+      // 兜底：个别 Node 版本下 close 回调可能迟迟不来，别让 CLI/测试挂死在这里
+      const fallback = setTimeout(resolve, 3000);
+      fallback.unref?.();
+      server.close(() => {
+        clearTimeout(fallback);
+        resolve();
+      });
     });
 
   return new Promise((resolve, reject) => {

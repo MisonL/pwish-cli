@@ -8,6 +8,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 12 # 兜底：清理逻辑偶发挂住时不要占着 runner 十几分钟
     strategy:
       matrix:
         node: [20, 22, 24]

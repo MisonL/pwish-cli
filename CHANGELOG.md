@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [0.18.7] - 2026-11-28
+
+### Fixed
+
+- **CI 偶发挂住**（同一份测试 0.18.5 用 21s 跑完、0.18.6 却卡 10 分钟）：给 `startAuthServer`
+  的 `shutdown()` 也加上 3s 兜底计时器（此前只有 e2e 假服务有），个别 Node 版本上
+  `server.close()` 回调可能迟迟不来
+
+### Chore
+
+- `npm test` 加 `--test-timeout=120000`：卡住的用例会明确失败，而不是让 job 一直挂着
+- CI 加 `timeout-minutes: 12` 兜底
+
 ## [0.18.6] - 2026-11-28
 
 ### Docs
